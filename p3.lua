@@ -357,8 +357,7 @@ function types.encodepropvalue(vals,typename)
 			local w=v.Weight.Value or 400
 			buf.writeu8(b,w%256) buf.writeu8(b,math.floor(w/256)%256)
 			buf.writeu8(b,v.Style==Enum.FontStyle.Italic and 1 or 0)
-			local cid=tostring(v.CachedFaceId)
-			buf.writeu32le(b,#cid) buf.writestring(b,cid)
+			buf.writeu32le(b,0)
 		end
 		end
 	elseif t=='OptionalCFrame' then
