@@ -331,7 +331,7 @@ end
 elseif t=='Instance' then
 	return 0x13,function(b)
 	local refs={}
-	for _ in ipairs(vals) do table.insert(refs,-1) end
+	for _ in ipairs(vals) do table.insert(refs,0) end
 	buf.writestring(b,buf.encodereferents(refs))
 end
 elseif t=='Vector3int16' then
@@ -515,7 +515,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 	elseif typeid==0x13 then
 		local refs,p=buf.decodereferents(data,pos,count) pos=p
 		local vals={}
-		for _,v in ipairs(refs) do table.insert(vals,'<Ref name="'..buf.xmlescape(propname)..'">'.. (v==-1 and 'null' or tostring(v)) ..'</Ref>') end
+		for _,v in ipairs(refs) do table.insert(vals,'<Ref name="'..buf.xmlescape(propname)..'">'.. (v==0 and 'null' or ('RBX'..string.format('%08X',v)..string.format('%08X',v))) ..'</Ref>') end
 		return vals,pos
 	elseif typeid==0x14 then
 		local vals={}
@@ -696,5 +696,273 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 	else
 		return nil,pos
 	end
+end
+end
+local skippityskip2={
+	AssemblyAngularVelocity=true,AssemblyCenterOfMass=true,AssemblyLinearVelocity=true,
+	AssemblyMass=true,AssemblyRootPart=true,CenterOfMass=true,CurrentPhysicalProperties=true,
+	ExtentsCFrame=true,ExtentsSize=true,Orientation=true,Position=true,Rotation=true,
+	SpecificGravity=true,UniqueId=true,DataCost=true,ClassName=true,className=true,
+	archivable=true,brickColor=true,formFactor=true,ReceiveAge=true,LocalTransparencyModifier=true,
+}
+local binaryStringProps2={ChildData=true,MeshData=true,PhysicsData=true,AttributesSerialize=true,Attributes=true,Tags=true}
+local hiddenExtraProps2={
+	PartOperation={'ChildData','MeshData','PhysicsData'},
+	UnionOperation={'ChildData','MeshData','PhysicsData'},
+	MeshPart={'MeshData','PhysicsData'},
+	SpecialMesh={'MeshData'},
+	Terrain={'SmoothGrid','ClusterGrid'},
+}
+local function readprop2(inst,prop)
+	local s,v=pcall(function() return (inst::any)[prop] end)
+	if s and v~=nil then return true,v end
+	if gethiddenproperty then
+		local s2,v2=pcall(gethiddenproperty,inst,prop)
+		if s2 and v2~=nil then return true,v2 end
+	end
+	return false,nil
+end
+function types.instancetotable(inst)
+	local t={classname=inst.ClassName,props={},children={}}
+	local cur=inst.ClassName
+	local seen={}
+	while cur do
+		if classprops and classprops[cur] then
+			for _,p in ipairs(classprops[cur]) do
+				if not seen[p] and not skippityskip2[p] then
+					seen[p]=true
+					local ok,v=readprop2(inst,p)
+					if ok and v~=nil then t.props[p]=v end
+				end
+			end
+		end
+		cur=superclass and superclass[cur]
+	end
+	if not seen['AttributesSerialize'] then
+		t.props['AttributesSerialize']=types.encodeattributes(inst)
+	end
+	if hiddenExtraProps2[inst.ClassName] then
+		for _,p in ipairs(hiddenExtraProps2[inst.ClassName]) do
+			if not seen[p] then
+				local ok,v=readprop2(inst,p)
+				if ok and v~=nil then t.props[p]=v end
+			end
+		end
+	end
+	for _,child in ipairs(inst:GetChildren()) do
+		table.insert(t.children,types.instancetotable(child))
+	end
+	return t
+end
+function types.tabletoxml(t,depth)
+	depth=depth or 1
+	local ind=string.rep('\t',depth)
+	local ind2=string.rep('\t',depth+1)
+	local lines={}
+	table.insert(lines,ind..'<Item class="'..buf.xmlescape(t.classname)..'">')
+	table.insert(lines,ind2..'<Properties>')
+	local sortedprops={}
+	for k in pairs(t.props) do table.insert(sortedprops,k) end
+	table.sort(sortedprops)
+	for _,k in ipairs(sortedprops) do
+		local v=t.props[k]
+		local tv=typeof(v)
+		local xml
+		if binaryStringProps2[k] then
+			local bytes=type(v)=='string' and v or ''
+			if k=='AttributesSerialize' or k=='Attributes' then
+				xml=types.decodeattributesxml(bytes,k)
+			else
+				xml='<BinaryString name="'..buf.xmlescape(k)..'">'..buf.b64encode(bytes)..'</BinaryString>'
+			end
+		elseif tv=='string' then
+			local pt=types.getproptype and types.getproptype(t.classname,k)
+			if pt=='Content' or hadtodothis[k] then
+				if v=='' then xml='<Content name="'..buf.xmlescape(k)..'" null="true" />'
+				else xml='<Content name="'..buf.xmlescape(k)..'"><url>'..buf.xmlescape(v)..'</url></Content>' end
+			else
+				xml='<string name="'..buf.xmlescape(k)..'">'..buf.xmlescape(v)..'</string>'
+			end
+		elseif tv=='boolean' then
+			xml='<bool name="'..buf.xmlescape(k)..'">'.. (v and 'true' or 'false') ..'</bool>'
+		elseif tv=='number' then
+			local pt=types.getproptype and types.getproptype(t.classname,k)
+			if pt=='int' or pt=='int64' then xml='<int name="'..buf.xmlescape(k)..'">'..math.floor(v)..'</int>'
+			elseif pt=='double' then xml='<double name="'..buf.xmlescape(k)..'">'..string.format('%.17g',v)..'</double>'
+			else xml='<float name="'..buf.xmlescape(k)..'">'..buf.fmt(v)..'</float>' end
+		elseif tv=='Vector2' then
+			xml='<Vector2 name="'..buf.xmlescape(k)..'"><X>'..buf.fmt(v.X)..'</X><Y>'..buf.fmt(v.Y)..'</Y></Vector2>'
+		elseif tv=='Vector3' then
+			xml='<Vector3 name="'..buf.xmlescape(k)..'"><X>'..buf.fmt(v.X)..'</X><Y>'..buf.fmt(v.Y)..'</Y><Z>'..buf.fmt(v.Z)..'</Z></Vector3>'
+		elseif tv=='CFrame' then
+			local c={v:GetComponents()}
+			xml=chunk.cframexml(k,c[1],c[2],c[3],{c[4],c[5],c[6],c[7],c[8],c[9],c[10],c[11],c[12]})
+		elseif tv=='Color3' then
+			local pt=types.getproptype and types.getproptype(t.classname,k)
+			if pt=='Color3uint8' then
+				local packed=math.floor(v.R*255+0.5)*65536+math.floor(v.G*255+0.5)*256+math.floor(v.B*255+0.5)+(0xFF*16777216)
+				xml='<Color3uint8 name="'..buf.xmlescape(k)..'">'..packed..'</Color3uint8>'
+			else
+				xml='<Color3 name="'..buf.xmlescape(k)..'"><R>'..buf.fmt(v.R)..'</R><G>'..buf.fmt(v.G)..'</G><B>'..buf.fmt(v.B)..'</B></Color3>'
+			end
+		elseif tv=='BrickColor' then
+			xml='<BrickColor name="'..buf.xmlescape(k)..'">'..v.Number..'</BrickColor>'
+		elseif tv=='UDim' then
+			xml='<UDim name="'..buf.xmlescape(k)..'"><S>'..buf.fmt(v.Scale)..'</S><O>'..v.Offset..'</O></UDim>'
+		elseif tv=='UDim2' then
+			xml='<UDim2 name="'..buf.xmlescape(k)..'"><XS>'..buf.fmt(v.X.Scale)..'</XS><XO>'..v.X.Offset..'</XO><YS>'..buf.fmt(v.Y.Scale)..'</YS><YO>'..v.Y.Offset..'</YO></UDim2>'
+		elseif tv=='Rect' then
+			xml='<Rect2D name="'..buf.xmlescape(k)..'"><min><X>'..buf.fmt(v.Min.X)..'</X><Y>'..buf.fmt(v.Min.Y)..'</Y></min><max><X>'..buf.fmt(v.Max.X)..'</X><Y>'..buf.fmt(v.Max.Y)..'</Y></max></Rect2D>'
+		elseif tv=='EnumItem' then
+			xml='<token name="'..buf.xmlescape(k)..'">'..v.Value..'</token>'
+		elseif tv=='NumberRange' then
+			xml='<NumberRange name="'..buf.xmlescape(k)..'">'..buf.fmt(v.Min)..' '..buf.fmt(v.Max)..'</NumberRange>'
+		elseif tv=='NumberSequence' then
+			local kfs={}
+			for _,kf in ipairs(v.Keypoints) do table.insert(kfs,buf.fmt(kf.Time)..' '..buf.fmt(kf.Value)..' '..buf.fmt(kf.Envelope)..' ') end
+			xml='<NumberSequence name="'..buf.xmlescape(k)..'">'..table.concat(kfs)..'</NumberSequence>'
+		elseif tv=='ColorSequence' then
+			local kfs={}
+			for _,kf in ipairs(v.Keypoints) do table.insert(kfs,buf.fmt(kf.Time)..' '..buf.fmt(kf.Value.R)..' '..buf.fmt(kf.Value.G)..' '..buf.fmt(kf.Value.B)..' 0 ') end
+			xml='<ColorSequence name="'..buf.xmlescape(k)..'">'..table.concat(kfs)..'</ColorSequence>'
+		elseif tv=='Ray' then
+			xml='<Ray name="'..buf.xmlescape(k)..'"><origin><X>'..buf.fmt(v.Origin.X)..'</X><Y>'..buf.fmt(v.Origin.Y)..'</Y><Z>'..buf.fmt(v.Origin.Z)..'</Z></origin><direction><X>'..buf.fmt(v.Direction.X)..'</X><Y>'..buf.fmt(v.Direction.Y)..'</Y><Z>'..buf.fmt(v.Direction.Z)..'</Z></direction></Ray>'
+		elseif tv=='Vector3int16' then
+			xml='<Vector3int16 name="'..buf.xmlescape(k)..'"><X>'..v.X..'</X><Y>'..v.Y..'</Y><Z>'..v.Z..'</Z></Vector3int16>'
+		elseif tv=='Faces' then
+			local front=v.Front and 'true' or 'false' local bottom=v.Bottom and 'true' or 'false'
+			local left=v.Left and 'true' or 'false' local back=v.Back and 'true' or 'false'
+			local top=v.Top and 'true' or 'false' local right=v.Right and 'true' or 'false'
+			xml='<Faces name="'..buf.xmlescape(k)..'"><front>'..front..'</front><bottom>'..bottom..'</bottom><left>'..left..'</left><back>'..back..'</back><top>'..top..'</top><right>'..right..'</right></Faces>'
+		elseif tv=='Axes' then
+			local x=v.X and 'true' or 'false' local y=v.Y and 'true' or 'false' local z=v.Z and 'true' or 'false'
+			xml='<Axes name="'..buf.xmlescape(k)..'"><X>'..x..'</X><Y>'..y..'</Y><Z>'..z..'</Z></Axes>'
+		end
+		if xml then table.insert(lines,ind2..'\t'..xml) end
+	end
+	table.insert(lines,ind2..'</Properties>')
+	for _,child in ipairs(t.children) do table.insert(lines,types.tabletoxml(child,depth+1)) end
+	table.insert(lines,ind..'</Item>')
+	return table.concat(lines,'\n')
+end
+function types.xmltotable(xml)
+	local function parseprops(propblock)
+		local props={}
+		local pos=1
+		while pos<=#propblock do
+			local s,e,full=propblock:find('(<[^/!][^>]*>.-</[%a%d_:]+>)',pos)
+			if not s then break end
+			local tagname=full:match('^<([%a%d_:]+)')
+			local nameattr=full:match(' name="([^"]*)"')
+			if tagname and nameattr then
+				local inner=full:match('^<[^>]+>(.*)</'..tagname..'>$')
+				props[nameattr]={tag=tagname,raw=inner or '',full=full}
+			end
+			pos=e+1
+		end
+		return props
+	end
+	local function parseitem(s)
+		local classname=s:match('<Item class="([^"]*)"')
+		if not classname then return nil end
+		local propblock=s:match('<Properties>(.-)</Properties>')
+		local props=propblock and parseprops(propblock) or {}
+		local children={}
+		local rest=s:match('</Properties>%s*(.*)</Item>%s*$')
+		if rest then
+			local cp=1
+			while cp<=#rest do
+				local is,ie=rest:find('<Item ',cp)
+				if not is then break end
+				local depth=1 local p=ie
+				while p<=#rest and depth>0 do
+					local os,oe=rest:find('<Item ',p)
+					local cs,ce=rest:find('</Item>',p)
+					if cs and (not os or cs<os) then depth=depth-1 p=ce+1
+					elseif os then depth=depth+1 p=oe+1
+					else break end
+				end
+				local child=parseitem(rest:sub(is,p-1))
+				if child then table.insert(children,child) end
+				cp=p
+			end
+		end
+		return {classname=classname,props=props,children=children}
+	end
+	return parseitem(xml)
+end
+function types.xmltorbxm(xml)
+	local instances={}
+	local id=-1
+	local function collect(t)
+		id=id+1 t.__id=id
+		table.insert(instances,t)
+		for _,child in ipairs(t.children) do collect(child) end
+	end
+	local roots={}
+	do
+		local cp=1
+		while cp<=#xml do
+			local is,ie=xml:find('<Item ',cp)
+			if not is then break end
+			local depth=1 local p=ie
+			while p<=#xml and depth>0 do
+				local os,oe=xml:find('<Item ',p)
+				local cs,ce=xml:find('</Item>',p)
+				if cs and (not os or cs<os) then depth=depth-1 p=ce+1
+				elseif os then depth=depth+1 p=oe+1
+				else break end
+			end
+			local t=types.xmltotable(xml:sub(is,p-1))
+			if t then table.insert(roots,t) end
+			cp=p
+		end
+	end
+	for _,r in ipairs(roots) do collect(r) end
+	local classgroups={} local classorder={} local classseen={}
+	for _,inst in ipairs(instances) do
+		local cn=inst.classname
+		if not classseen[cn] then
+			classseen[cn]=true
+			table.insert(classorder,cn)
+			classgroups[cn]={typeid=#classorder-1,instances={}}
+		end
+		table.insert(classgroups[cn].instances,inst)
+	end
+	local out={}
+	buf.writestring(out,'<roblox!\x89\xff\x0d\x0a\x1a\x0a')
+	buf.writeu16le(out,0)
+	buf.writei32le(out,#classorder)
+	buf.writei32le(out,#instances)
+	buf.writestring(out,string.rep('\0',8))
+	do local b={} buf.writeu32le(b,0) table.insert(out,chunk.makeraw('META',b)) end
+	for _,cn in ipairs(classorder) do
+		local group=classgroups[cn]
+		local b={}
+		buf.writeu32le(b,group.typeid)
+		buf.writelenstring(b,cn)
+		buf.writeu8(b,0)
+		buf.writeu32le(b,#group.instances)
+		local refs={}
+		for _,inst in ipairs(group.instances) do table.insert(refs,inst.__id) end
+		buf.writestring(b,buf.encodereferents(refs))
+		table.insert(out,chunk.make('INST',b))
+	end
+	local parentmap={}
+	for _,inst in ipairs(instances) do
+		for _,child in ipairs(inst.children) do parentmap[child.__id]=inst.__id end
+	end
+	local pb={} local childrefs={} local parentrefs={}
+	buf.writeu8(pb,0) buf.writeu32le(pb,#instances)
+	for _,inst in ipairs(instances) do
+		table.insert(childrefs,inst.__id)
+		local par=parentmap[inst.__id]
+		table.insert(parentrefs,par~=nil and par or -1)
+	end
+	buf.writestring(pb,buf.encodereferents(childrefs))
+	buf.writestring(pb,buf.encodereferents(parentrefs))
+	table.insert(out,chunk.make('PRNT',pb))
+	table.insert(out,chunk.makeraw('END\0',{'</roblox>'}))
+	return table.concat(out)
 end
 return types
