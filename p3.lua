@@ -721,10 +721,9 @@ local function readprop2(inst,prop)
 	end
 	return false,nil
 end
-local RFS=game:GetService('ReflectionService')
-local function getproperties(inst)
+function getproperties(inst)
 	local props={}
-	local ok,members=pcall(function() return RFS:GetPropertiesOfClass(inst.ClassName) end)
+	local ok,members=pcall(function() return game:service'ReflectionService':GetPropertiesOfClass(inst.ClassName) end)
 	if not ok then return props end
 	for _,v in ipairs(members) do
 		if v.Permits and v.Permits.Read and not skippityskip2[v.Name] then
