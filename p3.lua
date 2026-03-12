@@ -721,28 +721,27 @@ local function readprop2(inst,prop)
 	end
 	return false,nil
 end
-function types.instancetotable(inst)
-	local t={classname=inst.ClassName,props={},children={}}
-	local cur=inst.ClassName
-	local seen={}
-	while cur do
-		if classprops and classprops[cur] then
-			for _,p in ipairs(classprops[cur]) do
-				if not seen[p] and not skippityskip2[p] then
-					seen[p]=true
-					local ok,v=readprop2(inst,p)
-					if ok and v~=nil then t.props[p]=v end
-				end
-			end
+local RFS=game:GetService('ReflectionService')
+local function getproperties(inst)
+	local props={}
+	local ok,members=pcall(function() return RFS:GetPropertiesOfClass(inst.ClassName) end)
+	if not ok then return props end
+	for _,v in ipairs(members) do
+		if v.Permits and v.Permits.Read and not skippityskip2[v.Name] then
+			local ok2,val=readprop2(inst,v.Name)
+			if ok2 and val~=nil then props[v.Name]=val end
 		end
-		cur=superclass and superclass[cur]
 	end
-	if not seen['AttributesSerialize'] then
+	return props
+end
+function types.instancetotable(inst)
+	local t={classname=inst.ClassName,props=getproperties(inst),children={}}
+	if not t.props['AttributesSerialize'] then
 		t.props['AttributesSerialize']=types.encodeattributes(inst)
 	end
 	if hiddenExtraProps2[inst.ClassName] then
 		for _,p in ipairs(hiddenExtraProps2[inst.ClassName]) do
-			if not seen[p] then
+			if not t.props[p] then
 				local ok,v=readprop2(inst,p)
 				if ok and v~=nil then t.props[p]=v end
 			end
