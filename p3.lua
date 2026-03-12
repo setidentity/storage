@@ -1,37 +1,11 @@
-local function loadpb(url) return loadstring(game:HttpGet(url))() end
-buf=loadpb('https://raw.githubusercontent.com/setidentity/storage/main/p1.lua')
-chunk=loadpb('https://raw.githubusercontent.com/setidentity/storage/main/p2.lua')
 local types={}
-local RFS=game:service'ReflectionService'
-local ATTR_STRING=0x02
-local ATTR_BOOL=0x03
-local ATTR_DOUBLE=0x06
-local ATTR_UDIM=0x09
-local ATTR_UDIM2=0x0A
-local ATTR_BRICKCOLOR=0x0E
-local ATTR_COLOR3=0x0F
-local ATTR_VECTOR2=0x10
-local ATTR_VECTOR3=0x11
-local ATTR_CFRAME=0x13
-local ATTR_NUMBERSEQUENCE=0x17
-local ATTR_COLORSEQUENCE=0x19
-local ATTR_NUMBERRANGE=0x1B
-local ATTR_RECT=0x1C
-local rfspcache={}
-local function rfstype(classname,propname)
-	local k=classname..'\0'..propname
-	if rfspcache[k]~=nil then return rfspcache[k] end
-	local ok,v=pcall(function() return RFS:GetPropertyChangedSignal(classname,propname) end)
-	local s,t=pcall(function()
-		for _,m in ipairs(RFS:GetPropertiesOfClass(classname)) do
-			if m.Name==propname then return m.ValueType and m.ValueType.Name end
-		end
-	end)
-	rfspcache[k]=s and t or false
-	return rfspcache[k]
-end
+local astr=0x02 local abool=0x03 local adbl=0x06
+local audim=0x09 local audim2=0x0a local abcolor=0x0e
+local acol3=0x0f local avec2=0x10 local avec3=0x11
+local acf=0x13 local anseq=0x17 local acseq=0x19
+local anrange=0x1b local arect=0x1c
 function types.encodeattributes(inst)
-	local ok,attrs=pcall(function() return inst:GetAttributes() end)
+	local ok,attrs=pcall(function() return (inst::any):GetAttributes() end)
 	if not ok or not attrs then return '' end
 	local keys={}
 	for k in pairs(attrs) do table.insert(keys,k) end
@@ -44,38 +18,38 @@ function types.encodeattributes(inst)
 		local v=attrs[k]
 		local t=typeof(v)
 		if t=='string' then
-			buf.writeu8(b,ATTR_STRING) buf.writelenstring(b,v)
+			buf.writeu8(b,astr) buf.writelenstring(b,v)
 		elseif t=='boolean' then
-			buf.writeu8(b,ATTR_BOOL) buf.writeu8(b,v and 1 or 0)
+			buf.writeu8(b,abool) buf.writeu8(b,v and 1 or 0)
 		elseif t=='number' then
-			buf.writeu8(b,ATTR_DOUBLE) buf.writef64le(b,v)
+			buf.writeu8(b,adbl) buf.writef64le(b,v)
 		elseif t=='UDim' then
-			buf.writeu8(b,ATTR_UDIM) buf.writef32le(b,v.Scale) buf.writei32le(b,v.Offset)
+			buf.writeu8(b,audim) buf.writef32le(b,v.Scale) buf.writei32le(b,v.Offset)
 		elseif t=='UDim2' then
-			buf.writeu8(b,ATTR_UDIM2)
+			buf.writeu8(b,audim2)
 			buf.writef32le(b,v.X.Scale) buf.writei32le(b,v.X.Offset)
 			buf.writef32le(b,v.Y.Scale) buf.writei32le(b,v.Y.Offset)
 		elseif t=='BrickColor' then
-			buf.writeu8(b,ATTR_BRICKCOLOR) buf.writeu32le(b,v.Number)
+			buf.writeu8(b,abcolor) buf.writeu32le(b,v.Number)
 		elseif t=='Color3' then
-			buf.writeu8(b,ATTR_COLOR3)
+			buf.writeu8(b,acol3)
 			buf.writef32le(b,v.R) buf.writef32le(b,v.G) buf.writef32le(b,v.B)
 		elseif t=='Vector2' then
-			buf.writeu8(b,ATTR_VECTOR2) buf.writef32le(b,v.X) buf.writef32le(b,v.Y)
+			buf.writeu8(b,avec2) buf.writef32le(b,v.X) buf.writef32le(b,v.Y)
 		elseif t=='Vector3' then
-			buf.writeu8(b,ATTR_VECTOR3) buf.writef32le(b,v.X) buf.writef32le(b,v.Y) buf.writef32le(b,v.Z)
+			buf.writeu8(b,avec3) buf.writef32le(b,v.X) buf.writef32le(b,v.Y) buf.writef32le(b,v.Z)
 		elseif t=='CFrame' then
-			buf.writeu8(b,ATTR_CFRAME)
+			buf.writeu8(b,acf)
 			local c={v:GetComponents()}
 			for i=1,12 do buf.writef32le(b,c[i]) end
 		elseif t=='NumberSequence' then
-			buf.writeu8(b,ATTR_NUMBERSEQUENCE)
+			buf.writeu8(b,anseq)
 			buf.writeu32le(b,#v.Keypoints)
 			for _,kf in ipairs(v.Keypoints) do
 				buf.writef32le(b,kf.Time) buf.writef32le(b,kf.Value) buf.writef32le(b,kf.Envelope)
 			end
 		elseif t=='ColorSequence' then
-			buf.writeu8(b,ATTR_COLORSEQUENCE)
+			buf.writeu8(b,acseq)
 			buf.writeu32le(b,#v.Keypoints)
 			for _,kf in ipairs(v.Keypoints) do
 				buf.writef32le(b,kf.Time)
@@ -83,9 +57,9 @@ function types.encodeattributes(inst)
 				buf.writef32le(b,0)
 			end
 		elseif t=='NumberRange' then
-			buf.writeu8(b,ATTR_NUMBERRANGE) buf.writef32le(b,v.Min) buf.writef32le(b,v.Max)
+			buf.writeu8(b,anrange) buf.writef32le(b,v.Min) buf.writef32le(b,v.Max)
 		elseif t=='Rect' then
-			buf.writeu8(b,ATTR_RECT)
+			buf.writeu8(b,arect)
 			buf.writef32le(b,v.Min.X) buf.writef32le(b,v.Min.Y)
 			buf.writef32le(b,v.Max.X) buf.writef32le(b,v.Max.Y)
 		end
@@ -100,41 +74,41 @@ function types.decodeattributesxml(bytes,propname)
 	for i=1,count do
 		local key,p2=buf.readlenstring(bytes,pos) pos=p2
 		local tid,p3=buf.readu8(bytes,pos) pos=p3
-		if tid==ATTR_STRING then
+		if tid==astr then
 			local val,p4=buf.readlenstring(bytes,pos) pos=p4
 			table.insert(attrs,'<string key="'..buf.xmlescape(key)..'">'..buf.xmlescape(val)..'</string>')
-		elseif tid==ATTR_BOOL then
-			local b,pp=buf.readu8(bytes,pos) pos=pp
-			table.insert(attrs,'<bool key="'..buf.xmlescape(key)..'">'.. (b~=0 and 'true' or 'false') ..'</bool>')
-		elseif tid==ATTR_DOUBLE then
+		elseif tid==abool then
+			local bv,pp=buf.readu8(bytes,pos) pos=pp
+			table.insert(attrs,'<bool key="'..buf.xmlescape(key)..'">'.. (bv~=0 and 'true' or 'false') ..'</bool>')
+		elseif tid==adbl then
 			local v,pp=buf.readf64le(bytes,pos) pos=pp
 			table.insert(attrs,'<double key="'..buf.xmlescape(key)..'">'..string.format('%.17g',v)..'</double>')
-		elseif tid==ATTR_UDIM then
+		elseif tid==audim then
 			local s,pp=buf.readf32le(bytes,pos) local o,pp2=buf.readi32le(bytes,pp) pos=pp2
 			table.insert(attrs,'<UDim key="'..buf.xmlescape(key)..'"><S>'..buf.fmt(s)..'</S><O>'..o..'</O></UDim>')
-		elseif tid==ATTR_UDIM2 then
+		elseif tid==audim2 then
 			local xs,pp=buf.readf32le(bytes,pos) local xo,pp2=buf.readi32le(bytes,pp)
 			local ys,pp3=buf.readf32le(bytes,pp2) local yo,pp4=buf.readi32le(bytes,pp3) pos=pp4
 			table.insert(attrs,'<UDim2 key="'..buf.xmlescape(key)..'"><XS>'..buf.fmt(xs)..'</XS><XO>'..xo..'</XO><YS>'..buf.fmt(ys)..'</YS><YO>'..yo..'</YO></UDim2>')
-		elseif tid==ATTR_BRICKCOLOR then
+		elseif tid==abcolor then
 			local n,pp=buf.readu32le(bytes,pos) pos=pp
 			table.insert(attrs,'<BrickColor key="'..buf.xmlescape(key)..'">'..n..'</BrickColor>')
-		elseif tid==ATTR_COLOR3 then
+		elseif tid==acol3 then
 			local r,pp=buf.readf32le(bytes,pos) local g,pp2=buf.readf32le(bytes,pp) local b2,pp3=buf.readf32le(bytes,pp2) pos=pp3
 			table.insert(attrs,'<Color3 key="'..buf.xmlescape(key)..'"><R>'..buf.fmt(r)..'</R><G>'..buf.fmt(g)..'</G><B>'..buf.fmt(b2)..'</B></Color3>')
-		elseif tid==ATTR_VECTOR2 then
+		elseif tid==avec2 then
 			local x,pp=buf.readf32le(bytes,pos) local y,pp2=buf.readf32le(bytes,pp) pos=pp2
 			table.insert(attrs,'<Vector2 key="'..buf.xmlescape(key)..'"><X>'..buf.fmt(x)..'</X><Y>'..buf.fmt(y)..'</Y></Vector2>')
-		elseif tid==ATTR_VECTOR3 then
+		elseif tid==avec3 then
 			local x,pp=buf.readf32le(bytes,pos) local y,pp2=buf.readf32le(bytes,pp) local z,pp3=buf.readf32le(bytes,pp2) pos=pp3
 			table.insert(attrs,'<Vector3 key="'..buf.xmlescape(key)..'"><X>'..buf.fmt(x)..'</X><Y>'..buf.fmt(y)..'</Y><Z>'..buf.fmt(z)..'</Z></Vector3>')
-		elseif tid==ATTR_CFRAME then
+		elseif tid==acf then
 			local c={} for j=1,12 do local v,pp=buf.readf32le(bytes,pos) pos=pp c[j]=v end
 			table.insert(attrs,'<CFrame key="'..buf.xmlescape(key)..'"><X>'..buf.fmt(c[1])..'</X><Y>'..buf.fmt(c[2])..'</Y><Z>'..buf.fmt(c[3])..'</Z>'
 				..'<R00>'..buf.fmt(c[4])..'</R00><R01>'..buf.fmt(c[5])..'</R01><R02>'..buf.fmt(c[6])..'</R02>'
 				..'<R10>'..buf.fmt(c[7])..'</R10><R11>'..buf.fmt(c[8])..'</R11><R12>'..buf.fmt(c[9])..'</R12>'
 				..'<R20>'..buf.fmt(c[10])..'</R20><R21>'..buf.fmt(c[11])..'</R21><R22>'..buf.fmt(c[12])..'</R22></CFrame>')
-		elseif tid==ATTR_NUMBERSEQUENCE then
+		elseif tid==anseq then
 			local kcount,pp=buf.readu32le(bytes,pos) pos=pp
 			local kfs={}
 			for k=1,kcount do
@@ -142,7 +116,7 @@ function types.decodeattributesxml(bytes,propname)
 				table.insert(kfs,'<Keypoint><time>'..buf.fmt(t)..'</time><value>'..buf.fmt(v)..'</value><envelope>'..buf.fmt(e)..'</envelope></Keypoint>')
 			end
 			table.insert(attrs,'<NumberSequence key="'..buf.xmlescape(key)..'">'..table.concat(kfs)..'</NumberSequence>')
-		elseif tid==ATTR_COLORSEQUENCE then
+		elseif tid==acseq then
 			local kcount,pp=buf.readu32le(bytes,pos) pos=pp
 			local kfs={}
 			for k=1,kcount do
@@ -150,10 +124,10 @@ function types.decodeattributesxml(bytes,propname)
 				table.insert(kfs,'<Keypoint><time>'..buf.fmt(t)..'</time><color><R>'..buf.fmt(r)..'</R><G>'..buf.fmt(g)..'</G><B>'..buf.fmt(b2)..'</B></color></Keypoint>')
 			end
 			table.insert(attrs,'<ColorSequence key="'..buf.xmlescape(key)..'">'..table.concat(kfs)..'</ColorSequence>')
-		elseif tid==ATTR_NUMBERRANGE then
+		elseif tid==anrange then
 			local mn,pp=buf.readf32le(bytes,pos) local mx,pp2=buf.readf32le(bytes,pp) pos=pp2
 			table.insert(attrs,'<NumberRange key="'..buf.xmlescape(key)..'">'..buf.fmt(mn)..' '..buf.fmt(mx)..'</NumberRange>')
-		elseif tid==ATTR_RECT then
+		elseif tid==arect then
 			local x0,pp=buf.readf32le(bytes,pos) local y0,pp2=buf.readf32le(bytes,pp)
 			local x1,pp3=buf.readf32le(bytes,pp2) local y1,pp4=buf.readf32le(bytes,pp3) pos=pp4
 			table.insert(attrs,'<Rect2D key="'..buf.xmlescape(key)..'"><min><X>'..buf.fmt(x0)..'</X><Y>'..buf.fmt(y0)..'</Y></min><max><X>'..buf.fmt(x1)..'</X><Y>'..buf.fmt(y1)..'</Y></max></Rect2D>')
@@ -163,25 +137,24 @@ function types.decodeattributesxml(bytes,propname)
 	end
 	return '<Attributes name="'..buf.xmlescape(propname)..'">'..table.concat(attrs)..'</Attributes>'
 end
-function types.encodepropvalue(vals,classname,propname)
+function types.encodepropvalue(vals,typename)
 	local t=typeof(vals[1])
-	local engtype=classname and propname and rfstype(classname,propname)
 	if t=='string' then
-		if engtype=='Content' then
-			return 0x1D,function(b) for _,v in ipairs(vals) do buf.writelenstring(b,v) end end
+		if typename=='Content' then
+			return 0x1d,function(b) for _,v in ipairs(vals) do buf.writelenstring(b,tostring(v)) end end
 		end
 		return 0x01,function(b) for _,v in ipairs(vals) do buf.writelenstring(b,tostring(v)) end end
 	elseif t=='boolean' then
 		return 0x02,function(b) for _,v in ipairs(vals) do buf.writeu8(b,v and 1 or 0) end end
 	elseif t=='number' then
-		if engtype=='int' then
+		if typename=='int' then
 			return 0x03,function(b)
 			local ints={}
 			for _,v in ipairs(vals) do table.insert(ints,math.floor(v)) end
 			buf.writestring(b,buf.interleaveints(ints))
-		end
-		elseif engtype=='int64' then
-			return 0x1B,function(b)
+			end
+		elseif typename=='int64' then
+			return 0x1b,function(b)
 			local n=#vals
 			local bytes={}
 			for i=1,n do
@@ -199,15 +172,15 @@ function types.encodepropvalue(vals,classname,propname)
 			local chars={}
 			for _,byte in ipairs(bytes) do table.insert(chars,string.char(byte)) end
 			buf.writestring(b,table.concat(chars))
-		end
-		elseif engtype=='double' then
+			end
+		elseif typename=='double' then
 			return 0x05,function(b) for _,v in ipairs(vals) do buf.writef64le(b,v) end end
 		else
 			return 0x04,function(b)
 			local floats={}
 			for _,v in ipairs(vals) do table.insert(floats,buf.robloxfloat(v)) end
 			buf.writestring(b,buf.interleave(floats))
-		end
+			end
 		end
 	elseif t=='UDim' then
 		return 0x06,function(b)
@@ -218,7 +191,7 @@ function types.encodepropvalue(vals,classname,propname)
 		end
 		buf.writestring(b,buf.interleave(scales))
 		buf.writestring(b,buf.interleaveints(offsets))
-	end
+		end
 	elseif t=='UDim2' then
 		return 0x07,function(b)
 		local xs,ys,xo,yo={},{},{},{}
@@ -228,50 +201,42 @@ function types.encodepropvalue(vals,classname,propname)
 			table.insert(xo,math.floor(v.X.Offset))
 			table.insert(yo,math.floor(v.Y.Offset))
 		end
-		buf.writestring(b,buf.interleave(xs))
-		buf.writestring(b,buf.interleave(ys))
-		buf.writestring(b,buf.interleaveints(xo))
-		buf.writestring(b,buf.interleaveints(yo))
-	end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
+		buf.writestring(b,buf.interleaveints(xo)) buf.writestring(b,buf.interleaveints(yo))
+		end
 	elseif t=='Ray' then
 		return 0x08,function(b)
 		for _,v in ipairs(vals) do
 			buf.writef32le(b,v.Origin.X) buf.writef32le(b,v.Origin.Y) buf.writef32le(b,v.Origin.Z)
 			buf.writef32le(b,v.Direction.X) buf.writef32le(b,v.Direction.Y) buf.writef32le(b,v.Direction.Z)
 		end
-	end
+		end
 	elseif t=='Faces' then
 		return 0x09,function(b)
 		for _,v in ipairs(vals) do
 			local n=0
-			if v.Front then n=n+1 end
-			if v.Bottom then n=n+2 end
-			if v.Left then n=n+4 end
-			if v.Back then n=n+8 end
-			if v.Top then n=n+16 end
-			if v.Right then n=n+32 end
+			if v.Front then n=n+1 end if v.Bottom then n=n+2 end if v.Left then n=n+4 end
+			if v.Back then n=n+8 end if v.Top then n=n+16 end if v.Right then n=n+32 end
 			buf.writeu8(b,n)
 		end
-	end
+		end
 	elseif t=='Axes' then
-		return 0x0A,function(b)
+		return 0x0a,function(b)
 		for _,v in ipairs(vals) do
 			local n=0
-			if v.X then n=n+1 end
-			if v.Y then n=n+2 end
-			if v.Z then n=n+4 end
+			if v.X then n=n+1 end if v.Y then n=n+2 end if v.Z then n=n+4 end
 			buf.writeu8(b,n)
 		end
-	end
+		end
 	elseif t=='BrickColor' then
-		return 0x0B,function(b)
+		return 0x0b,function(b)
 		local nums={}
 		for _,v in ipairs(vals) do table.insert(nums,v.Number) end
 		buf.writestring(b,buf.interleave(nums))
-	end
+		end
 	elseif t=='Color3' then
-		if engtype=='Color3uint8' then
-			return 0x1A,function(b)
+		if typename=='Color3uint8' then
+			return 0x1a,function(b)
 			local rs,gs,bs={},{},{}
 			for _,v in ipairs(vals) do
 				table.insert(rs,math.floor(v.R*255+0.5))
@@ -281,36 +246,32 @@ function types.encodepropvalue(vals,classname,propname)
 			for _,r in ipairs(rs) do buf.writeu8(b,r) end
 			for _,g in ipairs(gs) do buf.writeu8(b,g) end
 			for _,bv in ipairs(bs) do buf.writeu8(b,bv) end
-		end
+			end
 		else
-			return 0x0C,function(b)
+			return 0x0c,function(b)
 			local rs,gs,bs={},{},{}
 			for _,v in ipairs(vals) do
 				table.insert(rs,buf.robloxfloat(v.R))
 				table.insert(gs,buf.robloxfloat(v.G))
 				table.insert(bs,buf.robloxfloat(v.B))
 			end
-			buf.writestring(b,buf.interleave(rs))
-			buf.writestring(b,buf.interleave(gs))
-			buf.writestring(b,buf.interleave(bs))
-		end
+			buf.writestring(b,buf.interleave(rs)) buf.writestring(b,buf.interleave(gs)) buf.writestring(b,buf.interleave(bs))
+			end
 		end
 	elseif t=='Vector2' then
-		return 0x0D,function(b)
+		return 0x0d,function(b)
 		local xs,ys={},{}
 		for _,v in ipairs(vals) do table.insert(xs,buf.robloxfloat(v.X)) table.insert(ys,buf.robloxfloat(v.Y)) end
 		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
-	end
+		end
 	elseif t=='Vector3' then
-		return 0x0E,function(b)
+		return 0x0e,function(b)
 		local xs,ys,zs={},{},{}
 		for _,v in ipairs(vals) do
-			table.insert(xs,buf.robloxfloat(v.X))
-			table.insert(ys,buf.robloxfloat(v.Y))
-			table.insert(zs,buf.robloxfloat(v.Z))
+			table.insert(xs,buf.robloxfloat(v.X)) table.insert(ys,buf.robloxfloat(v.Y)) table.insert(zs,buf.robloxfloat(v.Z))
 		end
 		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
-	end
+		end
 	elseif t=='CFrame' then
 		return 0x10,function(b)
 		local xs,ys,zs={},{},{}
@@ -322,42 +283,39 @@ function types.encodepropvalue(vals,classname,propname)
 				buf.writeu8(b,0)
 				for i=4,12 do buf.writef32le(b,c[i]) end
 			end
-			table.insert(xs,buf.robloxfloat(v.X))
-			table.insert(ys,buf.robloxfloat(v.Y))
-			table.insert(zs,buf.robloxfloat(v.Z))
+			table.insert(xs,buf.robloxfloat(v.X)) table.insert(ys,buf.robloxfloat(v.Y)) table.insert(zs,buf.robloxfloat(v.Z))
 		end
 		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
-	end
+		end
 	elseif t=='EnumItem' then
 		return 0x12,function(b)
 		local nums={}
 		for _,v in ipairs(vals) do table.insert(nums,v.Value) end
 		buf.writestring(b,buf.interleave(nums))
-	end
+		end
 	elseif t=='Instance' then
 		return 0x13,function(b)
-		local refs={}
-		for _ in ipairs(vals) do table.insert(refs,0) end
-		buf.writestring(b,buf.encodereferents(refs))
-	end
+		local refids={}
+		for _,v in ipairs(vals) do
+			local id=types.currentrefs and types.currentrefs[v] or -1
+			table.insert(refids,id~=nil and id or -1)
+		end
+		buf.writestring(b,buf.encodereferents(refids))
+		end
 	elseif t=='Vector3int16' then
 		return 0x14,function(b)
 		for _,v in ipairs(vals) do
-			local function wi16(n)
-				n=math.floor(n)
-				if n<0 then n=n+65536 end
-				table.insert(b,string.char(n%256,math.floor(n/256)%256))
-			end
+			local function wi16(n) n=math.floor(n) if n<0 then n=n+65536 end table.insert(b,string.char(n%256,math.floor(n/256)%256)) end
 			wi16(v.X) wi16(v.Y) wi16(v.Z)
 		end
-	end
+		end
 	elseif t=='NumberSequence' then
 		return 0x15,function(b)
 		for _,v in ipairs(vals) do
 			buf.writeu32le(b,#v.Keypoints)
 			for _,kf in ipairs(v.Keypoints) do buf.writef32le(b,kf.Time) buf.writef32le(b,kf.Value) buf.writef32le(b,kf.Envelope) end
 		end
-	end
+		end
 	elseif t=='ColorSequence' then
 		return 0x16,function(b)
 		for _,v in ipairs(vals) do
@@ -368,7 +326,7 @@ function types.encodepropvalue(vals,classname,propname)
 				buf.writef32le(b,0)
 			end
 		end
-	end
+		end
 	elseif t=='NumberRange' then
 		return 0x17,function(b) for _,v in ipairs(vals) do buf.writef32le(b,v.Min) buf.writef32le(b,v.Max) end end
 	elseif t=='Rect' then
@@ -380,31 +338,65 @@ function types.encodepropvalue(vals,classname,propname)
 		end
 		buf.writestring(b,buf.interleave(x0s)) buf.writestring(b,buf.interleave(y0s))
 		buf.writestring(b,buf.interleave(x1s)) buf.writestring(b,buf.interleave(y1s))
-	end
+		end
 	elseif t=='PhysicalProperties' then
-		return 0x19,function(b) for _ in ipairs(vals) do buf.writeu8(b,1) end end
+		return 0x19,function(b)
+		for _,v in ipairs(vals) do
+			if v.FrictionWeight~=nil then
+				buf.writeu8(b,1)
+				buf.writef32le(b,v.Density) buf.writef32le(b,v.Friction) buf.writef32le(b,v.Elasticity)
+				buf.writef32le(b,v.FrictionWeight) buf.writef32le(b,v.ElasticityWeight)
+			else buf.writeu8(b,0) end
+		end
+		end
+	elseif t=='Font' then
+		return 0x20,function(b)
+		for _,v in ipairs(vals) do
+			local fam=tostring(v.Family)
+			buf.writeu32le(b,#fam) buf.writestring(b,fam)
+			local w=v.Weight.Value or 400
+			buf.writeu8(b,w%256) buf.writeu8(b,math.floor(w/256)%256)
+			buf.writeu8(b,v.Style==Enum.FontStyle.Italic and 1 or 0)
+			local cid=tostring(v.CachedFaceId)
+			buf.writeu32le(b,#cid) buf.writestring(b,cid)
+		end
+		end
+	elseif t=='OptionalCFrame' then
+		return 0x1e,function(b)
+		local xs,ys,zs={},{},{}
+		local presence={}
+		for _,v in ipairs(vals) do
+			if v==nil then table.insert(presence,0)
+			else
+				table.insert(presence,1)
+				local id=chunk.getcframeid(v)
+				if id then buf.writeu8(b,id)
+				else
+					local cc={v:GetComponents()}
+					buf.writeu8(b,0)
+					for i=4,12 do buf.writef32le(b,cc[i]) end
+				end
+				table.insert(xs,buf.robloxfloat(v.X)) table.insert(ys,buf.robloxfloat(v.Y)) table.insert(zs,buf.robloxfloat(v.Z))
+			end
+		end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
+		for _,p in ipairs(presence) do buf.writeu8(b,p) end
+		end
 	else
 		return nil,nil
 	end
 end
 function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
-	local mustbebinary={AttributesSerialize=true,Attributes=true,Tags=true}
-	local mustbeprotected={Source=true,ScriptContents=true}
+	local binaryprops={AttributesSerialize=true,Attributes=true,Tags=true}
+	local protectedprops={Source=true,ScriptContents=true}
 	if typeid==0x01 then
-		local engtype=classname and rfstype(classname,propname)
 		local vals={}
 		for i=1,count do
 			local s,p=buf.readlenstring(data,pos) pos=p
-			if mustbebinary[propname] then
+			if binaryprops[propname] then
 				table.insert(vals,'<BinaryString name="'..buf.xmlescape(propname)..'">'..buf.b64encode(s)..'</BinaryString>')
-			elseif mustbeprotected[propname] then
+			elseif protectedprops[propname] then
 				table.insert(vals,'<ProtectedString name="'..buf.xmlescape(propname)..'">'..buf.xmlescape(s)..'</ProtectedString>')
-			elseif engtype=='Content' then
-				if s=='' then
-					table.insert(vals,'<Content name="'..buf.xmlescape(propname)..'" null="true" />')
-				else
-					table.insert(vals,'<Content name="'..buf.xmlescape(propname)..'"><url>'..buf.xmlescape(s)..'</url></Content>')
-				end
 			else
 				table.insert(vals,'<string name="'..buf.xmlescape(propname)..'">'..buf.xmlescape(s)..'</string>')
 			end
@@ -469,7 +461,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			table.insert(vals,'<Faces name="'..buf.xmlescape(propname)..'"><front>'..front..'</front><bottom>'..bottom..'</bottom><left>'..left..'</left><back>'..back..'</back><top>'..top..'</top><right>'..right..'</right></Faces>')
 		end
 		return vals,pos
-	elseif typeid==0x0A then
+	elseif typeid==0x0a then
 		local vals={}
 		for i=1,count do
 			local b,p=buf.readu8(data,pos) pos=p
@@ -479,25 +471,25 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			table.insert(vals,'<Axes name="'..buf.xmlescape(propname)..'"><X>'..x..'</X><Y>'..y..'</Y><Z>'..z..'</Z></Axes>')
 		end
 		return vals,pos
-	elseif typeid==0x0B then
+	elseif typeid==0x0b then
 		local nums,p=buf.deinterleave(data,pos,count) pos=p
 		local vals={}
 		for _,v in ipairs(nums) do table.insert(vals,'<BrickColor name="'..buf.xmlescape(propname)..'">'..v..'</BrickColor>') end
 		return vals,pos
-	elseif typeid==0x0C then
+	elseif typeid==0x0c then
 		local rs,p=buf.deinterleaverobfloats(data,pos,count)
 		local gs,p2=buf.deinterleaverobfloats(data,p,count)
 		local bs,p3=buf.deinterleaverobfloats(data,p2,count) pos=p3
 		local vals={}
 		for i=1,count do table.insert(vals,'<Color3 name="'..buf.xmlescape(propname)..'"><R>'..buf.fmt(rs[i])..'</R><G>'..buf.fmt(gs[i])..'</G><B>'..buf.fmt(bs[i])..'</B></Color3>') end
 		return vals,pos
-	elseif typeid==0x0D then
+	elseif typeid==0x0d then
 		local xs,p=buf.deinterleaverobfloats(data,pos,count)
 		local ys,p2=buf.deinterleaverobfloats(data,p,count) pos=p2
 		local vals={}
 		for i=1,count do table.insert(vals,'<Vector2 name="'..buf.xmlescape(propname)..'"><X>'..buf.fmt(xs[i])..'</X><Y>'..buf.fmt(ys[i])..'</Y></Vector2>') end
 		return vals,pos
-	elseif typeid==0x0E then
+	elseif typeid==0x0e then
 		local xs,p=buf.deinterleaverobfloats(data,pos,count)
 		local ys,p2=buf.deinterleaverobfloats(data,p,count)
 		local zs,p3=buf.deinterleaverobfloats(data,p2,count) pos=p3
@@ -520,18 +512,15 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 	elseif typeid==0x13 then
 		local refs,p=buf.decodereferents(data,pos,count) pos=p
 		local vals={}
-		for _,v in ipairs(refs) do table.insert(vals,'<Ref name="'..buf.xmlescape(propname)..'">'.. (v==0 and 'null' or ('RBX'..string.format('%08X',v)..string.format('%08X',v))) ..'</Ref>') end
+		for _,v in ipairs(refs) do table.insert(vals,'<Ref name="'..buf.xmlescape(propname)..'">'.. (v<=0 and 'null' or ('RBX'..string.format('%08X',v)..string.format('%08X',v))) ..'</Ref>') end
 		return vals,pos
 	elseif typeid==0x14 then
 		local vals={}
 		for i=1,count do
 			local x=string.byte(data,pos)+string.byte(data,pos+1)*256
 			local y=string.byte(data,pos+2)+string.byte(data,pos+3)*256
-			local z=string.byte(data,pos+4)+string.byte(data,pos+5)*256
-			pos=pos+6
-			if x>=32768 then x=x-65536 end
-			if y>=32768 then y=y-65536 end
-			if z>=32768 then z=z-65536 end
+			local z=string.byte(data,pos+4)+string.byte(data,pos+5)*256 pos=pos+6
+			if x>=32768 then x=x-65536 end if y>=32768 then y=y-65536 end if z>=32768 then z=z-65536 end
 			table.insert(vals,'<Vector3int16 name="'..buf.xmlescape(propname)..'"><X>'..x..'</X><Y>'..y..'</Y><Z>'..z..'</Z></Vector3int16>')
 		end
 		return vals,pos
@@ -587,17 +576,16 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			end
 		end
 		return vals,pos
-	elseif typeid==0x1A then
+	elseif typeid==0x1a then
 		local rs={string.byte(data,pos,pos+count-1)}
 		local gs={string.byte(data,pos+count,pos+count*2-1)}
-		local bs={string.byte(data,pos+count*2,pos+count*3-1)}
-		pos=pos+count*3
+		local bs={string.byte(data,pos+count*2,pos+count*3-1)} pos=pos+count*3
 		local vals={}
 		for i=1,count do
-			local packed=rs[i]*65536+gs[i]*256+bs[i]+(0xFF*16777216)
-			table.insert(vals,'<Color3uint8 name="'..buf.xmlescape(propname)..'">'..packed..'</Color3uint8>') end
+			table.insert(vals,'<Color3uint8 name="'..buf.xmlescape(propname)..'">'.. (rs[i]*65536+gs[i]*256+bs[i]+(0xff*16777216)) ..'</Color3uint8>')
+		end
 		return vals,pos
-	elseif typeid==0x1B then
+	elseif typeid==0x1b then
 		local n=count
 		local bs={string.byte(data,pos,pos+n*8-1)}
 		local vals={}
@@ -615,7 +603,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			table.insert(vals,'<int64 name="'..buf.xmlescape(propname)..'">'..string.format('%d',v)..'</int64>')
 		end
 		return vals,pos+n*8
-	elseif typeid==0x1C then
+	elseif typeid==0x1c then
 		local vals={}
 		for i=1,count do
 			local len,p=buf.readu32le(data,pos) pos=p
@@ -627,7 +615,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			end
 		end
 		return vals,pos
-	elseif typeid==0x1D then
+	elseif typeid==0x1d then
 		local vals={}
 		for i=1,count do
 			local s,p=buf.readlenstring(data,pos) pos=p
@@ -638,7 +626,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			end
 		end
 		return vals,pos
-	elseif typeid==0x1E then
+	elseif typeid==0x1e then
 		local rotations,p=chunk.decodecframerotations(data,pos,count)
 		local xs,p2=buf.deinterleaverobfloats(data,p,count)
 		local ys,p3=buf.deinterleaverobfloats(data,p2,count)
@@ -663,7 +651,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			end
 		end
 		return vals,presencestart+count
-	elseif typeid==0x1F then
+	elseif typeid==0x1f then
 		local vals={}
 		for i=1,count do
 			local idx,p=buf.readu32le(data,pos) pos=p
@@ -694,662 +682,11 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 		for i=1,n do
 			local hi=bs[i]*16777216+bs[i+n]*65536+bs[i+n*2]*256+bs[i+n*3]
 			local lo=bs[i+n*4]*16777216+bs[i+n*5]*65536+bs[i+n*6]*256+bs[i+n*7]
-			local v=hi*4294967296+lo
-			table.insert(vals,'<SecurityCapabilities name="'..buf.xmlescape(propname)..'">'..string.format('%d',v)..'</SecurityCapabilities>')
+			table.insert(vals,'<SecurityCapabilities name="'..buf.xmlescape(propname)..'">'..string.format('%d',hi*4294967296+lo)..'</SecurityCapabilities>')
 		end
 		return vals,pos+n*8
 	else
 		return nil,pos
 	end
-end
-local skippityskip={
-	AssemblyAngularVelocity=true,AssemblyCenterOfMass=true,AssemblyLinearVelocity=true,
-	AssemblyMass=true,AssemblyRootPart=true,CenterOfMass=true,CurrentPhysicalProperties=true,
-	ExtentsCFrame=true,ExtentsSize=true,Orientation=true,Position=true,Rotation=true,
-	SpecificGravity=true,UniqueId=true,DataCost=true,ClassName=true,className=true,
-	archivable=true,brickColor=true,formFactor=true,ReceiveAge=true,LocalTransparencyModifier=true,
-}
-local binarystringprops={ChildData=true,MeshData=true,PhysicsData=true,AttributesSerialize=true,Attributes=true,Tags=true}
-local hiddenextraprops={
-	PartOperation={'ChildData','MeshData','PhysicsData'},
-	UnionOperation={'ChildData','MeshData','PhysicsData'},
-	MeshPart={'MeshData','PhysicsData'},
-	SpecialMesh={'MeshData'},
-	Terrain={'SmoothGrid','ClusterGrid'},
-}
-local function readprop(inst,prop)
-	local s,v=pcall(function() return inst[prop] end)
-	if s and v~=nil then return true,v end
-	if gethiddenproperty then
-		local s2,v2=pcall(gethiddenproperty,inst,prop)
-		if s2 and v2~=nil then return true,v2 end
-	end
-	return false,nil
-end
-local function getproperties(inst)
-	local props={}
-	for _,v in ipairs(RFS:GetPropertiesOfClass(inst.ClassName)) do
-		if v.Permits.Read and not skippityskip[v.Name] then
-			local s,val=readprop(inst,v.Name)
-			if s and val~=nil then props[v.Name]=val end
-		end
-	end
-	return props
-end
-function types.instancetotable(inst)
-	local t={classname=inst.ClassName,props=getproperties(inst),children={}}
-	if not t.props['AttributesSerialize'] then
-		t.props['AttributesSerialize']=types.encodeattributes(inst)
-	end
-	if hiddenextraprops[inst.ClassName] then
-		for _,p in ipairs(hiddenextraprops[inst.ClassName]) do
-			if not t.props[p] then
-				local s,v=readprop(inst,p)
-				if s and v~=nil then t.props[p]=v end
-			end
-		end
-	end
-	for _,child in ipairs(inst:GetChildren()) do
-		table.insert(t.children,types.instancetotable(child))
-	end
-	return t
-end
-function types.tabletoxml(t,depth)
-	depth=depth or 1
-	local ind=string.rep('\t',depth)
-	local ind2=string.rep('\t',depth+1)
-	local lines={}
-	table.insert(lines,ind..'<Item class="'..buf.xmlescape(t.classname)..'">')
-	table.insert(lines,ind2..'<Properties>')
-	local sortedprops={}
-	for k in pairs(t.props) do table.insert(sortedprops,k) end
-	table.sort(sortedprops)
-	for _,k in ipairs(sortedprops) do
-		local v=t.props[k]
-		local tv=typeof(v)
-		local engtype=rfstype(t.classname,k)
-		local xml
-		if binarystringprops[k] then
-			local bytes=type(v)=='string' and v or ''
-			if k=='AttributesSerialize' or k=='Attributes' then
-				xml=types.decodeattributesxml(bytes,k)
-			else
-				xml='<BinaryString name="'..buf.xmlescape(k)..'">'..buf.b64encode(bytes)..'</BinaryString>'
-			end
-		elseif tv=='string' then
-			if engtype=='Content' then
-				if v=='' then xml='<Content name="'..buf.xmlescape(k)..'" null="true" />'
-				else xml='<Content name="'..buf.xmlescape(k)..'"><url>'..buf.xmlescape(v)..'</url></Content>' end
-			else
-				xml='<string name="'..buf.xmlescape(k)..'">'..buf.xmlescape(v)..'</string>'
-			end
-		elseif tv=='boolean' then
-			xml='<bool name="'..buf.xmlescape(k)..'">'.. (v and 'true' or 'false') ..'</bool>'
-		elseif tv=='number' then
-			if engtype=='int' or engtype=='int64' then xml='<int name="'..buf.xmlescape(k)..'">'..math.floor(v)..'</int>'
-			elseif engtype=='double' then xml='<double name="'..buf.xmlescape(k)..'">'..string.format('%.17g',v)..'</double>'
-			else xml='<float name="'..buf.xmlescape(k)..'">'..buf.fmt(v)..'</float>' end
-		elseif tv=='Vector2' then
-			xml='<Vector2 name="'..buf.xmlescape(k)..'"><X>'..buf.fmt(v.X)..'</X><Y>'..buf.fmt(v.Y)..'</Y></Vector2>'
-		elseif tv=='Vector3' then
-			xml='<Vector3 name="'..buf.xmlescape(k)..'"><X>'..buf.fmt(v.X)..'</X><Y>'..buf.fmt(v.Y)..'</Y><Z>'..buf.fmt(v.Z)..'</Z></Vector3>'
-		elseif tv=='CFrame' then
-			local c={v:GetComponents()}
-			xml=chunk.cframexml(k,c[1],c[2],c[3],{c[4],c[5],c[6],c[7],c[8],c[9],c[10],c[11],c[12]})
-		elseif tv=='Color3' then
-			if engtype=='Color3uint8' then
-				local packed=math.floor(v.R*255+0.5)*65536+math.floor(v.G*255+0.5)*256+math.floor(v.B*255+0.5)+(0xFF*16777216)
-				xml='<Color3uint8 name="'..buf.xmlescape(k)..'">'..packed..'</Color3uint8>'
-			else
-				xml='<Color3 name="'..buf.xmlescape(k)..'"><R>'..buf.fmt(v.R)..'</R><G>'..buf.fmt(v.G)..'</G><B>'..buf.fmt(v.B)..'</B></Color3>'
-			end
-		elseif tv=='BrickColor' then
-			xml='<BrickColor name="'..buf.xmlescape(k)..'">'..v.Number..'</BrickColor>'
-		elseif tv=='UDim' then
-			xml='<UDim name="'..buf.xmlescape(k)..'"><S>'..buf.fmt(v.Scale)..'</S><O>'..v.Offset..'</O></UDim>'
-		elseif tv=='UDim2' then
-			xml='<UDim2 name="'..buf.xmlescape(k)..'"><XS>'..buf.fmt(v.X.Scale)..'</XS><XO>'..v.X.Offset..'</XO><YS>'..buf.fmt(v.Y.Scale)..'</YS><YO>'..v.Y.Offset..'</YO></UDim2>'
-		elseif tv=='Rect' then
-			xml='<Rect2D name="'..buf.xmlescape(k)..'"><min><X>'..buf.fmt(v.Min.X)..'</X><Y>'..buf.fmt(v.Min.Y)..'</Y></min><max><X>'..buf.fmt(v.Max.X)..'</X><Y>'..buf.fmt(v.Max.Y)..'</Y></max></Rect2D>'
-		elseif tv=='EnumItem' then
-			xml='<token name="'..buf.xmlescape(k)..'">'..v.Value..'</token>'
-		elseif tv=='NumberRange' then
-			xml='<NumberRange name="'..buf.xmlescape(k)..'">'..buf.fmt(v.Min)..' '..buf.fmt(v.Max)..'</NumberRange>'
-		elseif tv=='NumberSequence' then
-			local kfs={}
-			for _,kf in ipairs(v.Keypoints) do table.insert(kfs,buf.fmt(kf.Time)..' '..buf.fmt(kf.Value)..' '..buf.fmt(kf.Envelope)..' ') end
-			xml='<NumberSequence name="'..buf.xmlescape(k)..'">'..table.concat(kfs)..'</NumberSequence>'
-		elseif tv=='ColorSequence' then
-			local kfs={}
-			for _,kf in ipairs(v.Keypoints) do table.insert(kfs,buf.fmt(kf.Time)..' '..buf.fmt(kf.Value.R)..' '..buf.fmt(kf.Value.G)..' '..buf.fmt(kf.Value.B)..' 0 ') end
-			xml='<ColorSequence name="'..buf.xmlescape(k)..'">'..table.concat(kfs)..'</ColorSequence>'
-		elseif tv=='Ray' then
-			xml='<Ray name="'..buf.xmlescape(k)..'"><origin><X>'..buf.fmt(v.Origin.X)..'</X><Y>'..buf.fmt(v.Origin.Y)..'</Y><Z>'..buf.fmt(v.Origin.Z)..'</Z></origin><direction><X>'..buf.fmt(v.Direction.X)..'</X><Y>'..buf.fmt(v.Direction.Y)..'</Y><Z>'..buf.fmt(v.Direction.Z)..'</Z></direction></Ray>'
-		elseif tv=='Vector3int16' then
-			xml='<Vector3int16 name="'..buf.xmlescape(k)..'"><X>'..v.X..'</X><Y>'..v.Y..'</Y><Z>'..v.Z..'</Z></Vector3int16>'
-		elseif tv=='Faces' then
-			local front=v.Front and 'true' or 'false' local bottom=v.Bottom and 'true' or 'false'
-			local left=v.Left and 'true' or 'false' local back=v.Back and 'true' or 'false'
-			local top=v.Top and 'true' or 'false' local right=v.Right and 'true' or 'false'
-			xml='<Faces name="'..buf.xmlescape(k)..'"><front>'..front..'</front><bottom>'..bottom..'</bottom><left>'..left..'</left><back>'..back..'</back><top>'..top..'</top><right>'..right..'</right></Faces>'
-		elseif tv=='Axes' then
-			local x=v.X and 'true' or 'false' local y=v.Y and 'true' or 'false' local z=v.Z and 'true' or 'false'
-			xml='<Axes name="'..buf.xmlescape(k)..'"><X>'..x..'</X><Y>'..y..'</Y><Z>'..z..'</Z></Axes>'
-		end
-		if xml then table.insert(lines,ind2..'\t'..xml) end
-	end
-	table.insert(lines,ind2..'</Properties>')
-	for _,child in ipairs(t.children) do table.insert(lines,types.tabletoxml(child,depth+1)) end
-	table.insert(lines,ind..'</Item>')
-	return table.concat(lines,'\n')
-end
-function types.xmltotable(xml)
-	local function parseprops(propblock)
-		local props={}
-		local pos=1
-		while pos<=#propblock do
-			local s,e,full=propblock:find('(<[^/!][^>]*>.-</[%a%d_:]+>)',pos)
-			if not s then break end
-			local tagname=full:match('^<([%a%d_:]+)')
-			local nameattr=full:match(' name="([^"]*)"')
-			if tagname and nameattr then
-				local inner=full:match('^<[^>]+>(.*)</'..tagname..'>$')
-				props[nameattr]={tag=tagname,raw=inner or '',full=full}
-			end
-			pos=e+1
-		end
-		return props
-	end
-	local function parseitem(s)
-		local classname=s:match('<Item class="([^"]*)"')
-		if not classname then return nil end
-		local propblock=s:match('<Properties>(.-)</Properties>')
-		local props=propblock and parseprops(propblock) or {}
-		local children={}
-		local rest=s:match('</Properties>%s*(.*)</Item>%s*$')
-		if rest then
-			local cp=1
-			while cp<=#rest do
-				local is,ie=rest:find('<Item ',cp)
-				if not is then break end
-				local depth=1 local p=ie
-				while p<=#rest and depth>0 do
-					local os,oe=rest:find('<Item ',p)
-					local cs,ce=rest:find('</Item>',p)
-					if cs and (not os or cs<os) then depth=depth-1 p=ce+1
-					elseif os then depth=depth+1 p=oe+1
-					else break end
-				end
-				local child=parseitem(rest:sub(is,p-1))
-				if child then table.insert(children,child) end
-				cp=p
-			end
-		end
-		return {classname=classname,props=props,children=children}
-	end
-	return parseitem(xml)
-end
-local xmlproptype={
-	string=0x01,bool=0x02,int=0x03,float=0x04,double=0x05,
-	UDim=0x06,UDim2=0x07,Ray=0x08,Faces=0x09,Axes=0x0A,
-	BrickColor=0x0B,Color3=0x0C,Vector2=0x0D,Vector3=0x0E,
-	CoordinateFrame=0x10,token=0x12,Ref=0x13,Vector3int16=0x14,
-	NumberSequence=0x15,ColorSequence=0x16,NumberRange=0x17,
-	Rect2D=0x18,PhysicalProperties=0x19,Color3uint8=0x1A,
-	int64=0x1B,BinaryString=0x1C,Content=0x1D,
-	OptionalCoordinateFrame=0x1E,SharedString=0x1F,Font=0x20,
-	SecurityCapabilities=0x21,Attributes=0x1C,
-}
-local function b64decode(r)
-	local chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-	local map={}
-	for i=1,#chars do map[chars:sub(i,i)]=i-1 end
-	local out={}
-	local s=r:gsub('[^%w%+%/%=]','')
-	for i=1,#s-3,4 do
-		local a,b,c,d=map[s:sub(i,i)],map[s:sub(i+1,i+1)],map[s:sub(i+2,i+2)],map[s:sub(i+3,i+3)]
-		if a and b then
-			table.insert(out,string.char(math.floor(a*4+b/16)%256))
-			if c then table.insert(out,string.char(math.floor(b*16+c/4)%256)) end
-			if c and d then table.insert(out,string.char(math.floor(c*64+d)%256)) end
-		end
-	end
-	return table.concat(out)
-end
-local function encodexmlprop(tag,raws,b)
-	if tag=='string' or tag=='ProtectedString' then
-		for _,r in ipairs(raws) do buf.writelenstring(b,r) end
-		return 0x01
-	elseif tag=='bool' then
-		for _,r in ipairs(raws) do buf.writeu8(b,r=='true' and 1 or 0) end
-		return 0x02
-	elseif tag=='int' then
-		local ints={}
-		for _,r in ipairs(raws) do table.insert(ints,tonumber(r) or 0) end
-		buf.writestring(b,buf.interleaveints(ints))
-		return 0x03
-	elseif tag=='float' then
-		local floats={}
-		for _,r in ipairs(raws) do table.insert(floats,buf.robloxfloat(tonumber(r) or 0)) end
-		buf.writestring(b,buf.interleave(floats))
-		return 0x04
-	elseif tag=='double' then
-		for _,r in ipairs(raws) do buf.writef64le(b,tonumber(r) or 0) end
-		return 0x05
-	elseif tag=='token' then
-		local nums={}
-		for _,r in ipairs(raws) do table.insert(nums,tonumber(r) or 0) end
-		buf.writestring(b,buf.interleave(nums))
-		return 0x12
-	elseif tag=='BrickColor' then
-		local nums={}
-		for _,r in ipairs(raws) do table.insert(nums,tonumber(r) or 0) end
-		buf.writestring(b,buf.interleave(nums))
-		return 0x0B
-	elseif tag=='Color3' then
-		local rs,gs,bs={},{},{}
-		for _,r in ipairs(raws) do
-			table.insert(rs,buf.robloxfloat(tonumber(r:match('<R>(.-)</R>')) or 0))
-			table.insert(gs,buf.robloxfloat(tonumber(r:match('<G>(.-)</G>')) or 0))
-			table.insert(bs,buf.robloxfloat(tonumber(r:match('<B>(.-)</B>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(rs)) buf.writestring(b,buf.interleave(gs)) buf.writestring(b,buf.interleave(bs))
-		return 0x0C
-	elseif tag=='Color3uint8' then
-		local rs,gs,bs={},{},{}
-		for _,r in ipairs(raws) do
-			local packed=tonumber(r) or 0
-			table.insert(rs,math.floor(packed/65536)%256) table.insert(gs,math.floor(packed/256)%256) table.insert(bs,packed%256)
-		end
-		for _,v in ipairs(rs) do buf.writeu8(b,v) end
-		for _,v in ipairs(gs) do buf.writeu8(b,v) end
-		for _,v in ipairs(bs) do buf.writeu8(b,v) end
-		return 0x1A
-	elseif tag=='Vector2' then
-		local xs,ys={},{}
-		for _,r in ipairs(raws) do
-			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
-			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
-		return 0x0D
-	elseif tag=='Vector3' then
-		local xs,ys,zs={},{},{}
-		for _,r in ipairs(raws) do
-			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
-			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
-			table.insert(zs,buf.robloxfloat(tonumber(r:match('<Z>(.-)</Z>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
-		return 0x0E
-	elseif tag=='CoordinateFrame' then
-		local xs,ys,zs={},{},{}
-		for _,r in ipairs(raws) do
-			buf.writeu8(b,0)
-			buf.writef32le(b,tonumber(r:match('<R00>(.-)</R00>')) or 1)
-			buf.writef32le(b,tonumber(r:match('<R01>(.-)</R01>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R02>(.-)</R02>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R10>(.-)</R10>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R11>(.-)</R11>')) or 1)
-			buf.writef32le(b,tonumber(r:match('<R12>(.-)</R12>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R20>(.-)</R20>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R21>(.-)</R21>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<R22>(.-)</R22>')) or 1)
-			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
-			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
-			table.insert(zs,buf.robloxfloat(tonumber(r:match('<Z>(.-)</Z>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
-		return 0x10
-	elseif tag=='UDim' then
-		local scales,offsets={},{}
-		for _,r in ipairs(raws) do
-			table.insert(scales,buf.robloxfloat(tonumber(r:match('<S>(.-)</S>')) or 0))
-			table.insert(offsets,math.floor(tonumber(r:match('<O>(.-)</O>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(scales)) buf.writestring(b,buf.interleaveints(offsets))
-		return 0x06
-	elseif tag=='UDim2' then
-		local xs,ys,xo,yo={},{},{},{}
-		for _,r in ipairs(raws) do
-			table.insert(xs,buf.robloxfloat(tonumber(r:match('<XS>(.-)</XS>')) or 0))
-			table.insert(ys,buf.robloxfloat(tonumber(r:match('<YS>(.-)</YS>')) or 0))
-			table.insert(xo,math.floor(tonumber(r:match('<XO>(.-)</XO>')) or 0))
-			table.insert(yo,math.floor(tonumber(r:match('<YO>(.-)</YO>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
-		buf.writestring(b,buf.interleaveints(xo)) buf.writestring(b,buf.interleaveints(yo))
-		return 0x07
-	elseif tag=='NumberRange' then
-		for _,r in ipairs(raws) do
-			local mn,mx=r:match('^([%d%.%-]+)%s+([%d%.%-]+)')
-			buf.writef32le(b,tonumber(mn) or 0) buf.writef32le(b,tonumber(mx) or 0)
-		end
-		return 0x17
-	elseif tag=='NumberSequence' then
-		for _,r in ipairs(raws) do
-			local kfs={}
-			for t2,v2,e2 in r:gmatch('([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)') do table.insert(kfs,{tonumber(t2),tonumber(v2),tonumber(e2)}) end
-			buf.writeu32le(b,#kfs)
-			for _,kf in ipairs(kfs) do buf.writef32le(b,kf[1]) buf.writef32le(b,kf[2]) buf.writef32le(b,kf[3]) end
-		end
-		return 0x15
-	elseif tag=='ColorSequence' then
-		for _,r in ipairs(raws) do
-			local kfs={}
-			for t2,r2,g2,b2 in r:gmatch('([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)%s+[%d%.%-]+') do table.insert(kfs,{tonumber(t2),tonumber(r2),tonumber(g2),tonumber(b2)}) end
-			buf.writeu32le(b,#kfs)
-			for _,kf in ipairs(kfs) do buf.writef32le(b,kf[1]) buf.writef32le(b,kf[2]) buf.writef32le(b,kf[3]) buf.writef32le(b,kf[4]) buf.writef32le(b,0) end
-		end
-		return 0x16
-	elseif tag=='Rect2D' then
-		local x0s,y0s,x1s,y1s={},{},{},{}
-		for _,r in ipairs(raws) do
-			table.insert(x0s,buf.robloxfloat(tonumber(r:match('<min>.-<X>(.-)</X>')) or 0))
-			table.insert(y0s,buf.robloxfloat(tonumber(r:match('<min>.-<Y>(.-)</Y>')) or 0))
-			table.insert(x1s,buf.robloxfloat(tonumber(r:match('<max>.-<X>(.-)</X>')) or 0))
-			table.insert(y1s,buf.robloxfloat(tonumber(r:match('<max>.-<Y>(.-)</Y>')) or 0))
-		end
-		buf.writestring(b,buf.interleave(x0s)) buf.writestring(b,buf.interleave(y0s))
-		buf.writestring(b,buf.interleave(x1s)) buf.writestring(b,buf.interleave(y1s))
-		return 0x18
-	elseif tag=='PhysicalProperties' then
-		for _,r in ipairs(raws) do
-			if r:match('<CustomPhysics>true</CustomPhysics>') then
-				buf.writeu8(b,1)
-				buf.writef32le(b,tonumber(r:match('<Density>(.-)</Density>')) or 0)
-				buf.writef32le(b,tonumber(r:match('<Friction>(.-)</Friction>')) or 0)
-				buf.writef32le(b,tonumber(r:match('<Elasticity>(.-)</Elasticity>')) or 0)
-				buf.writef32le(b,tonumber(r:match('<FrictionWeight>(.-)</FrictionWeight>')) or 0)
-				buf.writef32le(b,tonumber(r:match('<ElasticityWeight>(.-)</ElasticityWeight>')) or 0)
-			else
-				buf.writeu8(b,0)
-			end
-		end
-		return 0x19
-	elseif tag=='BinaryString' or tag=='Attributes' then
-		for _,r in ipairs(raws) do
-			local bytes=r
-			if not r:find('[^%w%+%/%=]') and #r%4==0 then bytes=b64decode(r) end
-			buf.writelenstring(b,bytes)
-		end
-		return 0x1C
-	elseif tag=='Content' then
-		for _,r in ipairs(raws) do buf.writelenstring(b,r:match('<url>(.-)</url>') or '') end
-		return 0x1D
-	elseif tag=='Ray' then
-		for _,r in ipairs(raws) do
-			buf.writef32le(b,tonumber(r:match('<origin>.-<X>(.-)</X>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<origin>.-<Y>(.-)</Y>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<origin>.-<Z>(.-)</Z>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<direction>.-<X>(.-)</X>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<direction>.-<Y>(.-)</Y>')) or 0)
-			buf.writef32le(b,tonumber(r:match('<direction>.-<Z>(.-)</Z>')) or 0)
-		end
-		return 0x08
-	elseif tag=='Faces' then
-		for _,r in ipairs(raws) do
-			local n=0
-			if r:match('<front>true</front>') then n=n+1 end
-			if r:match('<bottom>true</bottom>') then n=n+2 end
-			if r:match('<left>true</left>') then n=n+4 end
-			if r:match('<back>true</back>') then n=n+8 end
-			if r:match('<top>true</top>') then n=n+16 end
-			if r:match('<right>true</right>') then n=n+32 end
-			buf.writeu8(b,n)
-		end
-		return 0x09
-	elseif tag=='Axes' then
-		for _,r in ipairs(raws) do
-			local n=0
-			if r:match('<X>true</X>') then n=n+1 end
-			if r:match('<Y>true</Y>') then n=n+2 end
-			if r:match('<Z>true</Z>') then n=n+4 end
-			buf.writeu8(b,n)
-		end
-		return 0x0A
-	elseif tag=='Vector3int16' then
-		for _,r in ipairs(raws) do
-			local function wi16(n) n=math.floor(n) if n<0 then n=n+65536 end table.insert(b,string.char(n%256,math.floor(n/256)%256)) end
-			wi16(tonumber(r:match('<X>(.-)</X>')) or 0)
-			wi16(tonumber(r:match('<Y>(.-)</Y>')) or 0)
-			wi16(tonumber(r:match('<Z>(.-)</Z>')) or 0)
-		end
-		return 0x14
-	elseif tag=='int64' then
-		local n=#raws
-		local bytes={}
-		for i=1,n do
-			local v=tonumber(raws[i]) or 0
-			local neg=v<0
-			if neg then v=-v-1 end
-			local bv={}
-			for j=1,8 do bv[j]=v%256 v=math.floor(v/256) end
-			if neg then for j=1,8 do bv[j]=255-bv[j] end end
-			local topbit=math.floor(bv[8]/128)%2
-			for j=8,2,-1 do bv[j]=(bv[j]*2)%256+math.floor(bv[j-1]/128) end
-			bv[1]=(bv[1]*2)%256+topbit
-			for j=1,8 do bytes[(j-1)*n+i]=bv[j] end
-		end
-		local chars={}
-		for _,byte in ipairs(bytes) do table.insert(chars,string.char(byte)) end
-		buf.writestring(b,table.concat(chars))
-		return 0x1B
-	end
-	return false
-end
-function types.xmltorbxm(xml)
-	local instances={}
-	local id=-1
-	local function collect(t)
-		id=id+1 t.__id=id
-		table.insert(instances,t)
-		for _,child in ipairs(t.children) do collect(child) end
-	end
-	local roots={}
-	do
-		local cp=1
-		while cp<=#xml do
-			local is,ie=xml:find('<Item ',cp)
-			if not is then break end
-			local depth=1 local p=ie
-			while p<=#xml and depth>0 do
-				local os,oe=xml:find('<Item ',p)
-				local cs,ce=xml:find('</Item>',p)
-				if cs and (not os or cs<os) then depth=depth-1 p=ce+1
-				elseif os then depth=depth+1 p=oe+1
-				else break end
-			end
-			local t=types.xmltotable(xml:sub(is,p-1))
-			if t then table.insert(roots,t) end
-			cp=p
-		end
-	end
-	for _,r in ipairs(roots) do collect(r) end
-	local classgroups={} local classorder={} local classseen={}
-	for _,inst in ipairs(instances) do
-		local cn=inst.classname
-		if not classseen[cn] then
-			classseen[cn]=true
-			table.insert(classorder,cn)
-			classgroups[cn]={typeid=#classorder-1,instances={}}
-		end
-		table.insert(classgroups[cn].instances,inst)
-	end
-	local out={}
-	buf.writestring(out,'<roblox!\x89\xff\x0d\x0a\x1a\x0a')
-	buf.writeu16le(out,0)
-	buf.writei32le(out,#classorder)
-	buf.writei32le(out,#instances)
-	buf.writestring(out,string.rep('\0',8))
-	do local b={} buf.writeu32le(b,0) table.insert(out,chunk.makeraw('META',b)) end
-	for _,cn in ipairs(classorder) do
-		local group=classgroups[cn]
-		local b={}
-		buf.writeu32le(b,group.typeid)
-		buf.writelenstring(b,cn)
-		buf.writeu8(b,0)
-		buf.writeu32le(b,#group.instances)
-		local refs={}
-		for _,inst in ipairs(group.instances) do table.insert(refs,inst.__id) end
-		buf.writestring(b,buf.encodereferents(refs))
-		table.insert(out,chunk.make('INST',b))
-	end
-	for _,cn in ipairs(classorder) do
-		local group=classgroups[cn]
-		local propnames={} local propseen={}
-		for _,inst in ipairs(group.instances) do
-			for k in pairs(inst.props) do
-				if not propseen[k] then propseen[k]=true table.insert(propnames,k) end
-			end
-		end
-		table.sort(propnames)
-		for _,pname in ipairs(propnames) do
-			local tag=nil local raws={} local ok=true
-			for _,inst in ipairs(group.instances) do
-				local p=inst.props[pname]
-				if not p then ok=false break end
-				if not tag then tag=p.tag end
-				table.insert(raws,p.raw)
-			end
-			if ok and tag then
-				local b={}
-				local typeid=encodexmlprop(tag,raws,b)
-				if typeid then
-					local hdr={}
-					buf.writeu32le(hdr,group.typeid)
-					buf.writelenstring(hdr,pname)
-					buf.writeu8(hdr,typeid)
-					table.insert(out,chunk.make('PROP',{table.concat(hdr),table.concat(b)}))
-				end
-			end
-		end
-	end
-	local parentmap={}
-	for _,inst in ipairs(instances) do
-		for _,child in ipairs(inst.children) do parentmap[child.__id]=inst.__id end
-	end
-	local pb={} local childrefs={} local parentrefs={}
-	buf.writeu8(pb,0) buf.writeu32le(pb,#instances)
-	for _,inst in ipairs(instances) do
-		table.insert(childrefs,inst.__id)
-		local par=parentmap[inst.__id]
-		table.insert(parentrefs,par~=nil and par or -1)
-	end
-	buf.writestring(pb,buf.encodereferents(childrefs))
-	buf.writestring(pb,buf.encodereferents(parentrefs))
-	table.insert(out,chunk.make('PRNT',pb))
-	table.insert(out,chunk.makeraw('END\0',{'</roblox>'}))
-	return table.concat(out)
-end
-function types.tobinary(instance)
-	local t=types.instancetotable(instance)
-	local xml=types.tabletoxml(t)
-	return types.xmltorbxm(xml)
-end
-function types.binarytorbxmx(data)
-	local pos=1
-	assert(data:sub(pos,pos+7)=='<roblox!','bad magic')
-	pos=pos+8+6
-	local version,p=buf.readu16le(data,pos) pos=p
-	local classcount,p=buf.readi32le(data,pos) pos=p
-	local instcount,p=buf.readi32le(data,pos) pos=p
-	pos=pos+8
-	local classes={} local instprops={} local parents={} local instorder={} local sstr={}
-	while pos<=#data do
-		local chunkname=data:sub(pos,pos+3) pos=pos+4
-		local complen,p1=buf.readu32le(data,pos) pos=p1
-		local rawlen,p2=buf.readu32le(data,pos) pos=p2
-		local _,p3=buf.readu32le(data,pos) pos=p3
-		local chunkdata
-		if complen==0 then
-			chunkdata=data:sub(pos,pos+rawlen-1) pos=pos+rawlen
-		else
-			chunkdata=lz4decompress(data:sub(pos,pos+complen-1),rawlen) pos=pos+complen
-		end
-		local cn=chunkname:gsub('\0','')
-		if cn=='INST' then
-			local cp=1
-			local typeid,p1=buf.readu32le(chunkdata,cp) cp=p1
-			local classname,p2=buf.readlenstring(chunkdata,cp) cp=p2
-			local objfmt,p3=buf.readu8(chunkdata,cp) cp=p3
-			local icount,p4=buf.readu32le(chunkdata,cp) cp=p4
-			local refs,p5=buf.decodereferents(chunkdata,cp,icount) cp=p5
-			classes[typeid]={classname=classname,count=icount,referents=refs}
-			for _,ref in ipairs(refs) do
-				instprops[ref]={classname=classname,props={}}
-				table.insert(instorder,ref)
-			end
-		elseif cn=='PROP' then
-			local cp=1
-			local typeid,p1=buf.readu32le(chunkdata,cp) cp=p1
-			local propname,p2=buf.readlenstring(chunkdata,cp) cp=p2
-			local proptype,p3=buf.readu8(chunkdata,cp) cp=p3
-			local cls=classes[typeid]
-			if cls then
-				local ok,vals=pcall(types.decodepropvalues,proptype,chunkdata,cp,cls.count,propname,sstr,cls.classname)
-				if ok and vals then
-					for i,ref in ipairs(cls.referents) do
-						if instprops[ref] then instprops[ref].props[propname]=vals[i] end
-					end
-				end
-			end
-		elseif cn=='SSTR' then
-			local cp=1
-			local ver,p1=buf.readu32le(chunkdata,cp) cp=p1
-			local scount,p2=buf.readu32le(chunkdata,cp) cp=p2
-			for i=0,scount-1 do
-				local hash=chunkdata:sub(cp,cp+15) cp=cp+16
-				local s,p3=buf.readlenstring(chunkdata,cp) cp=p3
-				sstr[i]=s
-			end
-		elseif cn=='PRNT' then
-			local cp=1
-			local ver,p1=buf.readu8(chunkdata,cp) cp=p1
-			local icount,p2=buf.readu32le(chunkdata,cp) cp=p2
-			local childrefs,p3=buf.decodereferents(chunkdata,cp,icount) cp=p3
-			local parentrefs,p4=buf.decodereferents(chunkdata,cp,icount) cp=p4
-			for i=1,icount do parents[childrefs[i]]=parentrefs[i] end
-		elseif cn=='END' then break end
-	end
-	local children={}
-	for ref in pairs(instprops) do
-		local par=parents[ref]
-		if par and par~=-1 and instprops[par] then
-			if not children[par] then children[par]={} end
-			table.insert(children[par],ref)
-		end
-	end
-	local function buildxml(ref,depth)
-		local indent=string.rep('\t',depth)
-		local indent2=string.rep('\t',depth+1)
-		local inst=instprops[ref]
-		local lines={}
-		table.insert(lines,indent..'<Item class="'..buf.xmlescape(inst.classname)..'" referent="RBX'..string.format('%08X',ref)..string.format('%08X',ref)..'">')
-		table.insert(lines,indent2..'<Properties>')
-		local sortedprops={}
-		for k in pairs(inst.props) do table.insert(sortedprops,k) end
-		table.sort(sortedprops)
-		for _,k in ipairs(sortedprops) do table.insert(lines,indent2..'\t'..inst.props[k]) end
-		table.insert(lines,indent2..'</Properties>')
-		if children[ref] then
-			table.sort(children[ref])
-			for _,child in ipairs(children[ref]) do table.insert(lines,buildxml(child,depth+1)) end
-		end
-		table.insert(lines,indent..'</Item>')
-		return table.concat(lines,'\n')
-	end
-	local roots={}
-	for _,ref in ipairs(instorder) do
-		local par=parents[ref]
-		if not par or par==-1 or not instprops[par] then table.insert(roots,ref) end
-	end
-	local xmllines={'<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">'}
-	table.insert(xmllines,'\t<Meta name="ExplicitAutoJoints">true</Meta>')
-	table.insert(xmllines,'\t<External>null</External>')
-	table.insert(xmllines,'\t<External>nil</External>')
-	for _,ref in ipairs(roots) do table.insert(xmllines,buildxml(ref,1)) end
-	table.insert(xmllines,'</roblox>')
-	return table.concat(xmllines,'\n')
 end
 return types
