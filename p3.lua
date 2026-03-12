@@ -382,17 +382,23 @@ else
 end
 end
 function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
+	local mustbebinary={AttributesSerialize=true,Attributes=true,Tags=true}
+	local mustbeprotected={Source=true,ScriptContents=true}
 	if typeid==0x01 then
 		local pt=classname and types.getproptype and types.getproptype(classname,propname) or nil
 		local iscontent=pt=='Content' or hadtodothis[propname]
 		local vals={}
 		for i=1,count do
 			local s,p=buf.readlenstring(data,pos) pos=p
-			if iscontent then
+			if mustbebinary[propname] then
+				table.insert(vals,'<BinaryString name="'..buf.xmlescape(propname)..'">'..buf.b64encode(s)..'</BinaryString>')
+			elseif mustbeprotected[propname] then
+				table.insert(vals,'<ProtectedString name="'..buf.xmlescape(propname)..'">'..buf.xmlescape(s)..'</ProtectedString>')
+			elseif iscontent then
 				if s=='' then
 					table.insert(vals,'<Content name="'..buf.xmlescape(propname)..'" null="true" />')
 				else
-					table.insert(vals,'<Content name="'..buf.xmlescape(propname)..'"><url>'..buf.xmlescape(s)..'</url></Content>')
+					table.insert(vals,'<Content name="'..buf.xmlescape(propname)..'">'..'<url>'..buf.xmlescape(s)..'</url></Content>')
 				end
 			else
 				table.insert(vals,'<string name="'..buf.xmlescape(propname)..'">'..buf.xmlescape(s)..'</string>')
@@ -531,7 +537,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			local kfs={}
 			for k=1,kcount do
 				local t,p3=buf.readf32le(data,pos) local v,p4=buf.readf32le(data,p3) local e,p5=buf.readf32le(data,p4) pos=p5
-				table.insert(kfs,'<Keypoint><time>'..buf.fmt(t)..'</time><value>'..buf.fmt(v)..'</value><envelope>'..buf.fmt(e)..'</envelope></Keypoint>')
+				table.insert(kfs,buf.fmt(t)..' '..buf.fmt(v)..' '..buf.fmt(e)..' ')
 			end
 			table.insert(vals,'<NumberSequence name="'..buf.xmlescape(propname)..'">'..table.concat(kfs)..'</NumberSequence>')
 		end
@@ -543,7 +549,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			local kfs={}
 			for k=1,kcount do
 				local t,p3=buf.readf32le(data,pos) local r,p4=buf.readf32le(data,p3) local g,p5=buf.readf32le(data,p4) local b2,p6=buf.readf32le(data,p5) local _,p7=buf.readf32le(data,p6) pos=p7
-				table.insert(kfs,'<Keypoint><time>'..buf.fmt(t)..'</time><color><R>'..buf.fmt(r)..'</R><G>'..buf.fmt(g)..'</G><B>'..buf.fmt(b2)..'</B></color></Keypoint>')
+				table.insert(kfs,buf.fmt(t)..' '..buf.fmt(r)..' '..buf.fmt(g)..' '..buf.fmt(b2)..' 0 ')
 			end
 			table.insert(vals,'<ColorSequence name="'..buf.xmlescape(propname)..'">'..table.concat(kfs)..'</ColorSequence>')
 		end
@@ -582,7 +588,9 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 		local bs={string.byte(data,pos+count*2,pos+count*3-1)}
 		pos=pos+count*3
 		local vals={}
-		for i=1,count do table.insert(vals,'<Color3uint8 name="'..buf.xmlescape(propname)..'"><R>'..rs[i]..'</R><G>'..gs[i]..'</G><B>'..bs[i]..'</B></Color3uint8>') end
+		for i=1,count do
+			local packed=rs[i]*65536+gs[i]*256+bs[i]+(0xFF*16777216)
+			table.insert(vals,'<Color3uint8 name="'..buf.xmlescape(propname)..'">'..packed..'</Color3uint8>') end
 		return vals,pos
 	elseif typeid==0x1B then
 		local n=count
@@ -671,7 +679,7 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 			local style=string.byte(data,pos) pos=pos+1
 			local clen,p2=buf.readu32le(data,pos) pos=p2
 			local cacheid=data:sub(pos,pos+clen-1) pos=pos+clen
-			table.insert(vals,'<Font name="'..buf.xmlescape(propname)..'"><Family><uri>'..buf.xmlescape(family)..'</uri></Family><Weight>'..weight..'</Weight><Style>'..style..'</Style><CachedFaceId>'..buf.xmlescape(cacheid)..'</CachedFaceId></Font>')
+			table.insert(vals,'<Font name="'..buf.xmlescape(propname)..'"><Family><url>'..buf.xmlescape(family)..'</url></Family><Weight>'..weight..'</Weight><Style>'..buf.xmlescape(({'Normal','Italic'})[style+1] or 'Normal')..'</Style><CachedFaceId><url>'..buf.xmlescape(cacheid)..'</url></CachedFaceId></Font>')
 		end
 		return vals,pos
 	elseif typeid==0x21 then
