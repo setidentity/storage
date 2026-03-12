@@ -721,14 +721,12 @@ local function readprop2(inst,prop)
 	end
 	return false,nil
 end
-function getproperties(inst)
+local function getproperties(inst)
 	local props={}
-	local ok,members=pcall(function() return game:service'ReflectionService':GetPropertiesOfClass(inst.ClassName) end)
-	if not ok then return props end
-	for _,v in ipairs(members) do
-		if v.Permits and v.Permits.Read and not skippityskip2[v.Name] then
-			local ok2,val=readprop2(inst,v.Name)
-			if ok2 and val~=nil then props[v.Name]=val end
+	for _,v in ipairs(game:service'ReflectionService':GetPropertiesOfClass(inst.ClassName)) do
+		if v.Permits.Read and not skippityskip2[v.Name] then
+			local s,val=readprop2(inst,v.Name)
+			if s and val~=nil then props[v.Name]=val end
 		end
 	end
 	return props
@@ -888,6 +886,269 @@ function types.xmltotable(xml)
 	end
 	return parseitem(xml)
 end
+local xmlproptype={
+	string=0x01,bool=0x02,int=0x03,float=0x04,double=0x05,
+	UDim=0x06,UDim2=0x07,Ray=0x08,Faces=0x09,Axes=0x0A,
+	BrickColor=0x0B,Color3=0x0C,Vector2=0x0D,Vector3=0x0E,
+	CoordinateFrame=0x10,token=0x12,Ref=0x13,Vector3int16=0x14,
+	NumberSequence=0x15,ColorSequence=0x16,NumberRange=0x17,
+	Rect2D=0x18,PhysicalProperties=0x19,Color3uint8=0x1A,
+	int64=0x1B,BinaryString=0x1C,Content=0x1D,
+	OptionalCoordinateFrame=0x1E,SharedString=0x1F,Font=0x20,
+	SecurityCapabilities=0x21,Attributes=0x1C,
+}
+local function encodexmlprop(tag,raws,b)
+	local typeid=xmlproptype[tag]
+	if not typeid then return false end
+	if tag=='string' or tag=='ProtectedString' then
+		for _,r in ipairs(raws) do buf.writelenstring(b,r) end
+		return 0x01
+	elseif tag=='bool' then
+		for _,r in ipairs(raws) do buf.writeu8(b,r=='true' and 1 or 0) end
+		return 0x02
+	elseif tag=='int' then
+		local ints={}
+		for _,r in ipairs(raws) do table.insert(ints,tonumber(r) or 0) end
+		buf.writestring(b,buf.interleaveints(ints))
+		return 0x03
+	elseif tag=='float' then
+		local floats={}
+		for _,r in ipairs(raws) do table.insert(floats,buf.robloxfloat(tonumber(r) or 0)) end
+		buf.writestring(b,buf.interleave(floats))
+		return 0x04
+	elseif tag=='double' then
+		for _,r in ipairs(raws) do buf.writef64le(b,tonumber(r) or 0) end
+		return 0x05
+	elseif tag=='token' then
+		local nums={}
+		for _,r in ipairs(raws) do table.insert(nums,tonumber(r) or 0) end
+		buf.writestring(b,buf.interleave(nums))
+		return 0x12
+	elseif tag=='BrickColor' then
+		local nums={}
+		for _,r in ipairs(raws) do table.insert(nums,tonumber(r) or 0) end
+		buf.writestring(b,buf.interleave(nums))
+		return 0x0B
+	elseif tag=='Color3' then
+		local rs,gs,bs={},{},{}
+		for _,r in ipairs(raws) do
+			local rv=tonumber(r:match('<R>(.-)</R>')) or 0
+			local gv=tonumber(r:match('<G>(.-)</G>')) or 0
+			local bv=tonumber(r:match('<B>(.-)</B>')) or 0
+			table.insert(rs,buf.robloxfloat(rv)) table.insert(gs,buf.robloxfloat(gv)) table.insert(bs,buf.robloxfloat(bv))
+		end
+		buf.writestring(b,buf.interleave(rs)) buf.writestring(b,buf.interleave(gs)) buf.writestring(b,buf.interleave(bs))
+		return 0x0C
+	elseif tag=='Color3uint8' then
+		local rs,gs,bs={},{},{}
+		for _,r in ipairs(raws) do
+			local packed=tonumber(r) or 0
+			table.insert(rs,math.floor(packed/65536)%256) table.insert(gs,math.floor(packed/256)%256) table.insert(bs,packed%256)
+		end
+		for _,v in ipairs(rs) do buf.writeu8(b,v) end
+		for _,v in ipairs(gs) do buf.writeu8(b,v) end
+		for _,v in ipairs(bs) do buf.writeu8(b,v) end
+		return 0x1A
+	elseif tag=='Vector2' then
+		local xs,ys={},{}
+		for _,r in ipairs(raws) do
+			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
+			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
+		return 0x0D
+	elseif tag=='Vector3' then
+		local xs,ys,zs={},{},{}
+		for _,r in ipairs(raws) do
+			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
+			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
+			table.insert(zs,buf.robloxfloat(tonumber(r:match('<Z>(.-)</Z>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
+		return 0x0E
+	elseif tag=='CoordinateFrame' then
+		local xs,ys,zs={},{},{}
+		for _,r in ipairs(raws) do
+			local id=chunk.getcframeid and 0 or 0
+			local r00=tonumber(r:match('<R00>(.-)</R00>')) or 1
+			local r01=tonumber(r:match('<R01>(.-)</R01>')) or 0
+			local r02=tonumber(r:match('<R02>(.-)</R02>')) or 0
+			local r10=tonumber(r:match('<R10>(.-)</R10>')) or 0
+			local r11=tonumber(r:match('<R11>(.-)</R11>')) or 1
+			local r12=tonumber(r:match('<R12>(.-)</R12>')) or 0
+			local r20=tonumber(r:match('<R20>(.-)</R20>')) or 0
+			local r21=tonumber(r:match('<R21>(.-)</R21>')) or 0
+			local r22=tonumber(r:match('<R22>(.-)</R22>')) or 1
+			buf.writeu8(b,0)
+			buf.writef32le(b,r00) buf.writef32le(b,r01) buf.writef32le(b,r02)
+			buf.writef32le(b,r10) buf.writef32le(b,r11) buf.writef32le(b,r12)
+			buf.writef32le(b,r20) buf.writef32le(b,r21) buf.writef32le(b,r22)
+			table.insert(xs,buf.robloxfloat(tonumber(r:match('<X>(.-)</X>')) or 0))
+			table.insert(ys,buf.robloxfloat(tonumber(r:match('<Y>(.-)</Y>')) or 0))
+			table.insert(zs,buf.robloxfloat(tonumber(r:match('<Z>(.-)</Z>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys)) buf.writestring(b,buf.interleave(zs))
+		return 0x10
+	elseif tag=='UDim' then
+		local scales,offsets={},{}
+		for _,r in ipairs(raws) do
+			table.insert(scales,buf.robloxfloat(tonumber(r:match('<S>(.-)</S>')) or 0))
+			table.insert(offsets,math.floor(tonumber(r:match('<O>(.-)</O>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(scales)) buf.writestring(b,buf.interleaveints(offsets))
+		return 0x06
+	elseif tag=='UDim2' then
+		local xs,ys,xo,yo={},{},{},{}
+		for _,r in ipairs(raws) do
+			table.insert(xs,buf.robloxfloat(tonumber(r:match('<XS>(.-)</XS>')) or 0))
+			table.insert(ys,buf.robloxfloat(tonumber(r:match('<YS>(.-)</YS>')) or 0))
+			table.insert(xo,math.floor(tonumber(r:match('<XO>(.-)</XO>')) or 0))
+			table.insert(yo,math.floor(tonumber(r:match('<YO>(.-)</YO>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(xs)) buf.writestring(b,buf.interleave(ys))
+		buf.writestring(b,buf.interleaveints(xo)) buf.writestring(b,buf.interleaveints(yo))
+		return 0x07
+	elseif tag=='NumberRange' then
+		for _,r in ipairs(raws) do
+			local mn,mx=r:match('^([%d%.%-]+)%s+([%d%.%-]+)')
+			buf.writef32le(b,tonumber(mn) or 0) buf.writef32le(b,tonumber(mx) or 0)
+		end
+		return 0x17
+	elseif tag=='NumberSequence' then
+		for _,r in ipairs(raws) do
+			local kfs={}
+			for t2,v2,e2 in r:gmatch('([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)') do table.insert(kfs,{tonumber(t2),tonumber(v2),tonumber(e2)}) end
+			buf.writeu32le(b,#kfs)
+			for _,kf in ipairs(kfs) do buf.writef32le(b,kf[1]) buf.writef32le(b,kf[2]) buf.writef32le(b,kf[3]) end
+		end
+		return 0x15
+	elseif tag=='ColorSequence' then
+		for _,r in ipairs(raws) do
+			local kfs={}
+			for t2,r2,g2,b2 in r:gmatch('([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)%s+([%d%.%-]+)%s+[%d%.%-]+') do table.insert(kfs,{tonumber(t2),tonumber(r2),tonumber(g2),tonumber(b2)}) end
+			buf.writeu32le(b,#kfs)
+			for _,kf in ipairs(kfs) do buf.writef32le(b,kf[1]) buf.writef32le(b,kf[2]) buf.writef32le(b,kf[3]) buf.writef32le(b,kf[4]) buf.writef32le(b,0) end
+		end
+		return 0x16
+	elseif tag=='Rect2D' then
+		local x0s,y0s,x1s,y1s={},{},{},{}
+		for _,r in ipairs(raws) do
+			table.insert(x0s,buf.robloxfloat(tonumber(r:match('<min>.-<X>(.-)</X>')) or 0))
+			table.insert(y0s,buf.robloxfloat(tonumber(r:match('<min>.-<Y>(.-)</Y>')) or 0))
+			table.insert(x1s,buf.robloxfloat(tonumber(r:match('<max>.-<X>(.-)</X>')) or 0))
+			table.insert(y1s,buf.robloxfloat(tonumber(r:match('<max>.-<Y>(.-)</Y>')) or 0))
+		end
+		buf.writestring(b,buf.interleave(x0s)) buf.writestring(b,buf.interleave(y0s))
+		buf.writestring(b,buf.interleave(x1s)) buf.writestring(b,buf.interleave(y1s))
+		return 0x18
+	elseif tag=='PhysicalProperties' then
+		for _,r in ipairs(raws) do
+			local custom=r:match('<CustomPhysics>(.-)</CustomPhysics>')
+			if custom=='true' then
+				buf.writeu8(b,1)
+				buf.writef32le(b,tonumber(r:match('<Density>(.-)</Density>')) or 0)
+				buf.writef32le(b,tonumber(r:match('<Friction>(.-)</Friction>')) or 0)
+				buf.writef32le(b,tonumber(r:match('<Elasticity>(.-)</Elasticity>')) or 0)
+				buf.writef32le(b,tonumber(r:match('<FrictionWeight>(.-)</FrictionWeight>')) or 0)
+				buf.writef32le(b,tonumber(r:match('<ElasticityWeight>(.-)</ElasticityWeight>')) or 0)
+			else
+				buf.writeu8(b,0)
+			end
+		end
+		return 0x19
+	elseif tag=='BinaryString' or tag=='Attributes' then
+		for _,r in ipairs(raws) do
+			-- r is already raw binary bytes from instancetotable path, or b64 from xml path
+			local bytes=r
+			if not r:find('[^%w%+%/%=]') and #r%4==0 then
+				-- looks like b64, decode it
+				local db64={}
+				local chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+				local map={}
+				for i=1,#chars do map[chars:sub(i,i)]=i-1 end
+				local s2=r:gsub('[^%w%+%/%=]','')
+				for i=1,#s2-3,4 do
+					local a,bb,c,d=map[s2:sub(i,i)],map[s2:sub(i+1,i+1)],map[s2:sub(i+2,i+2)],map[s2:sub(i+3,i+3)]
+					if a and bb then
+						table.insert(db64,string.char(math.floor(a*4+bb/16)%256))
+						if c then table.insert(db64,string.char(math.floor(bb*16+c/4)%256)) end
+						if c and d then table.insert(db64,string.char(math.floor(c*64+d)%256)) end
+					end
+				end
+				bytes=table.concat(db64)
+			end
+			buf.writelenstring(b,bytes)
+		end
+		return 0x1C
+	elseif tag=='Content' then
+		for _,r in ipairs(raws) do
+			local url=r:match('<url>(.-)</url>')
+			buf.writelenstring(b,url or '')
+		end
+		return 0x1D
+	elseif tag=='Ray' then
+		for _,r in ipairs(raws) do
+			local ox=tonumber(r:match('<origin>.-<X>(.-)</X>')) or 0
+			local oy=tonumber(r:match('<origin>.-<Y>(.-)</Y>')) or 0
+			local oz=tonumber(r:match('<origin>.-<Z>(.-)</Z>')) or 0
+			local dx=tonumber(r:match('<direction>.-<X>(.-)</X>')) or 0
+			local dy=tonumber(r:match('<direction>.-<Y>(.-)</Y>')) or 0
+			local dz=tonumber(r:match('<direction>.-<Z>(.-)</Z>')) or 0
+			buf.writef32le(b,ox) buf.writef32le(b,oy) buf.writef32le(b,oz)
+			buf.writef32le(b,dx) buf.writef32le(b,dy) buf.writef32le(b,dz)
+		end
+		return 0x08
+	elseif tag=='Faces' then
+		for _,r in ipairs(raws) do
+			local n=0
+			if r:match('<front>true</front>') then n=n+1 end
+			if r:match('<bottom>true</bottom>') then n=n+2 end
+			if r:match('<left>true</left>') then n=n+4 end
+			if r:match('<back>true</back>') then n=n+8 end
+			if r:match('<top>true</top>') then n=n+16 end
+			if r:match('<right>true</right>') then n=n+32 end
+			buf.writeu8(b,n)
+		end
+		return 0x09
+	elseif tag=='Axes' then
+		for _,r in ipairs(raws) do
+			local n=0
+			if r:match('<X>true</X>') then n=n+1 end
+			if r:match('<Y>true</Y>') then n=n+2 end
+			if r:match('<Z>true</Z>') then n=n+4 end
+			buf.writeu8(b,n)
+		end
+		return 0x0A
+	elseif tag=='Vector3int16' then
+		for _,r in ipairs(raws) do
+			local function wi16(n) n=math.floor(n) if n<0 then n=n+65536 end table.insert(b,string.char(n%256,math.floor(n/256)%256)) end
+			wi16(tonumber(r:match('<X>(.-)</X>')) or 0)
+			wi16(tonumber(r:match('<Y>(.-)</Y>')) or 0)
+			wi16(tonumber(r:match('<Z>(.-)</Z>')) or 0)
+		end
+		return 0x14
+	elseif tag=='int64' then
+		local n=#raws
+		local bytes={}
+		for i=1,n do
+			local v=tonumber(raws[i]) or 0
+			local neg=v<0
+			if neg then v=-v-1 end
+			local bv={}
+			for j=1,8 do bv[j]=v%256 v=math.floor(v/256) end
+			if neg then for j=1,8 do bv[j]=255-bv[j] end end
+			local topbit=math.floor(bv[8]/128)%2
+			for j=8,2,-1 do bv[j]=(bv[j]*2)%256+math.floor(bv[j-1]/128) end
+			bv[1]=(bv[1]*2)%256+topbit
+			for j=1,8 do bytes[(j-1)*n+i]=bv[j] end
+		end
+		local chars={}
+		for _,byte in ipairs(bytes) do table.insert(chars,string.char(byte)) end
+		buf.writestring(b,table.concat(chars))
+		return 0x1B
+	end
+	return false
+end
 function types.xmltorbxm(xml)
 	local instances={}
 	local id=-1
@@ -944,6 +1205,38 @@ function types.xmltorbxm(xml)
 		for _,inst in ipairs(group.instances) do table.insert(refs,inst.__id) end
 		buf.writestring(b,buf.encodereferents(refs))
 		table.insert(out,chunk.make('INST',b))
+	end
+	for _,cn in ipairs(classorder) do
+		local group=classgroups[cn]
+		local propnames={} local propseen={}
+		for _,inst in ipairs(group.instances) do
+			for k in pairs(inst.props) do
+				if not propseen[k] then propseen[k]=true table.insert(propnames,k) end
+			end
+		end
+		table.sort(propnames)
+		for _,pname in ipairs(propnames) do
+			local tag=nil
+			local raws={}
+			local ok=true
+			for _,inst in ipairs(group.instances) do
+				local p=inst.props[pname]
+				if not p then ok=false break end
+				if not tag then tag=p.tag end
+				table.insert(raws,p.raw)
+			end
+			if ok and tag then
+				local b={}
+				local typeid=encodexmlprop(tag,raws,b)
+				if typeid then
+					local hdr={}
+					buf.writeu32le(hdr,group.typeid)
+					buf.writelenstring(hdr,pname)
+					buf.writeu8(hdr,typeid)
+					table.insert(out,chunk.make('PROP',{table.concat(hdr),table.concat(b)}))
+				end
+			end
+		end
 	end
 	local parentmap={}
 	for _,inst in ipairs(instances) do
