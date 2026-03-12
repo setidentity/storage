@@ -697,7 +697,6 @@ function types.decodepropvalues(typeid,data,pos,count,propname,sstr,classname)
 		return nil,pos
 	end
 end
-end
 local skippityskip2={
 	AssemblyAngularVelocity=true,AssemblyCenterOfMass=true,AssemblyLinearVelocity=true,
 	AssemblyMass=true,AssemblyRootPart=true,CenterOfMass=true,CurrentPhysicalProperties=true,
